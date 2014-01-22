@@ -1,0 +1,64 @@
+\documentclass[11pt]{article}
+\title{Boot Sequence Wiki Comments}
+\begin{document}
+\maketitle
+\begin{description}
+    \item{Entry} Nice description!  Thank you
+    \item{Main} cool ... does disabling the legacy pic also imply ensuring all 
+                sources of interrupts are squashed... eg I assume the APIC is
+                not automatically enabled in an unknown state.
+    \item{Memory Information Discovery and Page Mappings} So this a singleton run on the boot processor.  Do we have a sense of how long this can take on a machine that has an ugly layout?
+    Will we need something that turns some of this off if we don't really need more than 
+    the first Gig for an app that wants to use a dynamic node for very fast event processing?
+    Eg.  can we configure a static memory system so that we optimize when we know the machine
+     details and discovery is not an issue.  Eg come up in a state that the Memory allocator
+     representatives are backed in? 
+    \item{Ebb Initialization and Memory Allocators}
+      \begin{enumerate}
+        \item given that the boot processor has touch all of memory is there utility 
+              in leaving any extra info from this walk in the per-numa regions?
+        \item should the boot processor flush it's caches to alleviate cache traffic as the other cores will touch the memory?
+        \item Assume this sequence is still running on a single boot core
+              at first but will eventually be called on all cores
+        \item assume the page allocator, since it is shared across a NUMA node,
+              is lock based?  Is there any consideration of cache coherency traffic 
+              and critical section lengths within a NUMA node for the data-structures?
+              I assume not as I am guessing the expectation that is a hierarchy and the       
+              lower levels will address these issues and the frequency of access to 
+              this is lower and its costs amortized by the below layers which can
+              be tuned for a particular use case.
+        \item slab is a factory to create specific instances tuned to particular parameters  (nice).
+        \item Do you have in your mind a case/workload that you could show that the gp 
+              parameterization is not what you want.  
+        \item LocalIdmap:  My only question is why did the other stuff that happened
+              before not have a dependency on LocalIdMap.  Is there implicitly a special
+              class of "Static"/"Base"/"Initialization" Ebbs that is distinct from 
+              the ones that get created post LocalIdMap initialization.
+        \item is EbbAllocator just and interface around the LocalIdMap?  If so 
+              is there any sense in encapsulating it?
+        \end{enumerate}
+    \item{Starting the First Event}    
+      \begin{enumerate}
+        \item Is VMemAllocator init per core or is this shared?  Is this an Ebb?
+        \item EventManager: producer of stacks
+        \item SpawnLocal:  where is this queue?  Who is responsible for the resources and ordering on the queue?
+        \item StartProcessingEvents : is this the Eventloop?  Is it a loop or is it 
+              a function called by an external agent?
+    \end{enumerate}
+    \item{First Event}
+\begin{enumerate}
+  \item do I think of this as the crt0 code?
+  \item apic so now we are back to system code opposed to language initialization?
+        At this point could interrupt driven events occur?
+  \item Timer:  Is there an inherent timer event that is running too?
+  \item Ok so everyone initialize with a variant of the same code to get to 
+        all the first events terminating in a synchronous manner.  Is there 
+        a flag that turns off amp bring up or limits the number of cores?
+        Is there any utility is offering the ability to allow ragged starts?
+        Eg.  app code might be smart enough to get going and only use services
+        when they are ready?
+\end{enumerate}
+\end{description}
+VERY NICE!  Random though do we want a basic notification service as a programming paradigm to facilitate rendezvous style early synchronization. Eg.  When this becomes available do this.  I know that futures capture this but I just need to think more about
+more async continuation scenarios.  
+\end{document}

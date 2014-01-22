@@ -1,0 +1,166 @@
+\documentclass[11pt]{report}
+
+\title{EbbRT BM Exploration}
+\begin{document}
+\maketitle
+
+\chapter{Getting Started}
+
+This is what I needed to do to get going with writing and testing
+some Ebbs on our bare-metal environment.  The goal is to recreate
+some of the "standard" Clustered Object benchmarks.
+
+\section{Environment}
+\begin{description}
+\item{HOST:} kd-sesa.bu.edu 
+\begin{verbatim}
+Linux kd-sesa 3.13.0-1-generic #16-Ubuntu SMP 
+Tue Jan 7 19:44:06 UTC 2014 x86_64 x86_64 x86_64 GNU/Linux
+\end{verbatim}
+\item{REPO:} 
+\begin{verbatim}
+git clone --recursive git@github.com:SESA/EbbRT-baremetal.git
+\end{verbatim}
+\end{description}
+
+To get going once a clone has been done you need to cd into a particular build
+directory and run make. eg.
+\begin{verbatim}
+cd EbbRT-baremetal/
+jappavoo@kd-sesa:~/Work/EbbRT-baremetal$ ls
+build  build.mk  ext  misc  sys
+jappavoo@kd-sesa:~/Work/EbbRT-baremetal$ cd build/
+jappavoo@kd-sesa:~/Work/EbbRT-baremetal/build$ ls
+debug  opt
+jappavoo@kd-sesa:~/Work/EbbRT-baremetal/build$ cd ..
+jappavoo@kd-sesa:~/Work/EbbRT-baremetal$ ls
+build  build.mk  ext  misc  sys
+jappavoo@kd-sesa:~/Work/EbbRT-baremetal$ cd build
+jappavoo@kd-sesa:~/Work/EbbRT-baremetal/build$ ls
+debug  opt
+jappavoo@kd-sesa:~/Work/EbbRT-baremetal/build$ cd opt
+jappavoo@kd-sesa:~/Work/EbbRT-baremetal/build/opt$ ls
+Makefile
+jappavoo@kd-sesa:~/Work/EbbRT-baremetal/build/opt$ make
+  CXX sys/acpi.o
+  CXX sys/apic.o
+  AS sys/boot.o
+  ...
+    CXX sys/gthread.o
+../../ext/toolchain/bin/x86_64-pc-ebbrt-g++ -std=gnu++11 -U ebbrt -MD 
+-MT sys/runtime.o -MP -g3 -O4 -flto -DNDEBUG -Wall -Werror 
+-fno-stack-protector -I ../.. -I ../../ext/acpica/include 
+-I ../../ext/boost/include -I ../../ext/lwip/include 
+-I ../../ext/tbb/include -iquote ../../sys -iquote 
+../../ext/lwip/include/ipv4/  -c -o sys/runtime.o 
+  ../../sys/runtime.cc
+  LD ebbrt.elf
+  STRIP ebbrt.elf.stripped
+  MKRESCUE ebbrt.iso
+Enabling BIOS support ...
+xorriso 1.3.2 : RockRidge filesystem manipulator, libburnia project.
+\end{verbatim}
+
+To see all the gory details you can run the make system in verbose mode eg.
+{\tt make V=1}.
+
+This should leave you with a basic BM bootable ISO image:
+\begin{verbatim}
+jappavoo@kd-sesa:~/Work/EbbRT-baremetal/build/opt$ ls 
+ebbrt.elf  ebbrt.elf.stripped  ebbrt.iso  ext  Makefile  sys
+\end{verbatim}
+
+\newpage
+You should be able to run this on kvm via its qemu interface (Note: to run via kvm you will need to be in the kvm group).
+\begin{verbatim}
+jappavoo@kd-sesa:~/Work/EbbRT-baremetal/build/opt$ qemu-system-x86_64 \
+-m 2G \
+-numa node,cpus=0,mem=1G \
+-numa node,cpus=1,mem=1G \
+-smp sockets=2 \
+-cpu host \
+-gdb tcp::1235 \
+-enable-kvm \
+-nographic \
+-net nic,model=virtio \
+-net vde,sock=/tmp/vde_switch0 \
+-cdrom ebbrt.iso
+\end{verbatim}
+
+Currently by default this will get you to the point
+that the system will be waiting for a dhcp answer which will never come.  
+
+{\tiny
+\begin{verbatim}
+Warning: vlan 0 is not connected to host network
+EbbRT Copyright 2013-2014 SESA Developers
+e820_map:
+000000000000000000-0x000000000009fbff usable
+0x000000000009fc00-0x000000000009ffff reserved
+0x00000000000f0000-0x00000000000fffff reserved
+0x0000000000100000-0x000000007fffdfff usable
+0x000000007fffe000-0x000000007fffffff reserved
+0x00000000feffc000-0x00000000feffffff reserved
+0x00000000fffc0000-0x00000000ffffffff reserved
+ACPI: RSDP 0xf1650 000014 (v00 BOCHS )
+ACPI: RSDT 0x7fffe300 000038 (v01 BOCHS  BXPCRSDT 00000001 BXPC 00000001)
+ACPI: FACP 0x7fffff80 000074 (v01 BOCHS  BXPCFACP 00000001 BXPC 00000001)
+ACPI: DSDT 0x7fffe340 001137 (v01   BXPC   BXDSDT 00000001 INTL 20100528)
+ACPI: FACS 0x7fffff40 000040
+ACPI: SSDT 0x7ffff6a0 000899 (v01 BOCHS  BXPCSSDT 00000001 BXPC 00000001)
+ACPI: APIC 0x7ffff5b0 000080 (v01 BOCHS  BXPCAPIC 00000001 BXPC 00000001)
+ACPI: HPET 0x7ffff570 000038 (v01 BOCHS  BXPCHPET 00000001 BXPC 00000001)
+ACPI: SRAT 0x7ffff480 0000F0 (v01 BOCHS  BXPCSRAT 00000001 BXPC 00000001)
+Local APIC: ACPI ID: 0 APIC ID: 0
+Local APIC: ACPI ID: 1 APIC ID: 1
+IO APIC: ID: 0
+Interrupt Override: 0 -> 2
+Interrupt Override: 5 -> 5
+Interrupt Override: 9 -> 9
+Interrupt Override: 10 -> 10
+Interrupt Override: 11 -> 11
+NMI on all processors: LINT1
+SRAT CPU affinity: 0 -> 0
+SRAT CPU affinity: 1 -> 1
+SRAT Memory affinity: 000000000000000000-0x000000000009ffff -> 0
+SRAT Memory affinity: 0x0000000000100000-0x000000003fffffff -> 0
+SRAT Memory affinity: 0x0000000040000000-0x000000007fffffff -> 1
+Early Page Allocator NUMA mapping 0x0000000000782000-0x000000003fff9fff -> 0
+Early Page Allocator NUMA mapping 0x0000000040000000-0x000000007fffdfff -> 1
+Core 1 online
+PCI: 0:1:1 - BAR4 0x000000000000c020 - 0x000000000000c030
+PCI: 0:2:0 - BAR0 0x00000000fc000000 - 0x00000000fe000000
+PCI: 0:2:0 - BAR1 0x00000000febf1000 - 0x00000000febf2000
+PCI: 0:3:0 - BAR0 0x000000000000c000 - 0x000000000000c020
+PCI: 0:3:0 - BAR1 0x00000000febf0000 - 0x00000000febf1000
+0:3:0
+MSIX - 3 entries at BAR1:0
+Mac Address: 52:54:00:12:34:56
+\end{verbatim}
+}
+
+At this point you are looking at the output from QEMU on its simulated serial line.  You can escape to the QEMU monitor via "CTRL-A c" or quit directly via "CTRL-A x".  
+
+You can also attach gdb to the qemu debug stub that was configured via the qemu command line parameters.
+Eg.
+\begin{verbatim}
+jappavoo@kd-sesa:~/Work/EbbRT-baremetal/build/opt$ gdb ebbrt.elf
+(gdb) target remote localhost:1235
+Remote debugging using localhost:1235
+kabort (args#0=...) at ../../sys/debug.hpp:13
+13        kprintf(args...);
+(gdb) 
+\end{verbatim}
+
+\chapter{Hacking}
+
+First order of business is to get a simple baremetal
+up that gets all the way to issuing a application
+startup message and then sits in the event loop.
+To do this must first turn off the networking stuff
+and get ourselves up to our own startup code.
+
+\section{Disabling Networking and Hello World}
+
+ 
+\end{document}
