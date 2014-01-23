@@ -167,11 +167,11 @@ We seem to be unconditionally starting the network.
 There obvious things to do:
 \begin{enumerate}
 \item passing argument to avoid network startup
-\item make conditional on probe of nic being sucessfull
+\item make conditional on probe of nic being successful
 \item refactor code so that startup can be more easily customized
 \end{enumerate}
 Kludging until I understand more and grok our config strategy.
-So for the moment simply added \#ifdef NETWORKING around network bringup.
+So for the moment simply added \#ifdef NETWORKING around network bring-up.
 and tested this seems to get me to an initialized system with out networking
 as I desirer.   
 
@@ -193,7 +193,7 @@ First attempt was adding the following after the first SpawnLocal in main.cpp:
       });
 \end{verbatim}
 
-But this interleaved the Hello World before the system initialaztion was complete:
+But this interleaved the Hello World before the system initialization was complete:
 \begin{verbatim}
 ...
 Early Page Allocator NUMA mapping 0x0000000040000000-0x000000007fffdfff -> 1
