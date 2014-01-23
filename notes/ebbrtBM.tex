@@ -160,7 +160,157 @@ startup message and then sits in the event loop.
 To do this must first turn off the networking stuff
 and get ourselves up to our own startup code.
 
-\section{Disabling Networking and Hello World}
+\section{Disabling Networking}
+
+Ok it looks like the place to start is {\tt sys/main.cpp:109}
+We seem to be unconditionally starting the network. 
+There obvious things to do:
+\begin{enumerate}
+\item passing argument to avoid network startup
+\item make conditional on probe of nic being sucessfull
+\item refactor code so that startup can be more easily customized
+\end{enumerate}
+Kludging until I understand more and grok our config strategy.
+So for the moment simply added \#ifdef NETWORKING around network bringup.
+and tested this seems to get me to an initialized system with out networking
+as I desirer.   
+
+Added  to by ebbrt-contrib a qbm script to launch a bm instance with
+a set of default configurable arguments. eg:
+{\tt NETWORKING="" ebbrt-contrib/script/qbm} is what I am using to test 
+my baremetal app with no networking.
+
+\section{Initial "App" Event -- Hello World}
+
+First want to explore how to added an event that occurs after
+the "standard" System initialization.  Which I assume ends
+at the point of seeing the "System initialization complete" message.
+
+First attempt was adding the following after the first SpawnLocal in main.cpp:
+\begin{verbatim}
+    event_manager->SpawnLocal([]() {
+	kprintf("Hello World!!!\n");
+      });
+\end{verbatim}
+
+But this interleaved the Hello World before the system initialaztion was complete:
+\begin{verbatim}
+...
+Early Page Allocator NUMA mapping 0x0000000040000000-0x000000007fffdfff -> 1
+Hello World!!!
+Core 1 online
+System initialization complete
+\end{verbatim}
+
+Need to understand why.
+Next try is to put a spawn at the end of the initialization event.
+Ok this seems to have the effect that I want but not sure this is really 
+the "right" way to do it.  After I have a better understanding of how to 
+think about Events and the Event loop I will document and redo as needed.
+
+I would also like to understand what the correct way is for turning a hardware
+interrupt into a invocation of a specific method on a specific instance of an Ebb is (I assume also on a new Event).
+
+\subsection{hello app}
+Ok next step is to get Hello World building as its own ISO and runs
+on its own App specific initialization event that is spawned at the 
+end of the standard initialization event (no consideration for 
+multi-core issues at this point)
+
+First approach I am trying is to create a new set of files in the same
+directory and modify as little as possible in the current files.
+
+\begin{enumerate}
+\item modified main.cpp:
+\begin{verbatim}
+extern void appmain() __attribute__((weak));
+...
+    kprintf("System initialization complete\n");
+
+    if (appmain) {
+      event_manager->SpawnLocal(appmain);
+    } else {
+      kprintf("No appmain found...\n");
+    }
+
+  });
+\end{verbatim}
+\item added a hello.cxx
+\begin{verbatim}
+#include <sys/debug.hpp>
+
+using namespace ebbrt;
+
+void appmain()
+{
+  kprintf("Hello World!!!\n"); 
+}
+\end{verbatim}
+\item added hello.mk
+\begin{verbatim}
+include ./Makefile
+
+all: hello.iso
+
+hello.o: hello.cpp
+
+hello.iso: hello.elf.stripped
+	$(call quiet, $(mkrescue), MKRESCUE $@)
+
+hello.elf.stripped: hello.elf
+	$(call quiet, $(strip), STRIP $@)
+
+app_objects = hello.o
+
+LDFLAGS := -Wl,-n,-z,max-page-size=0x1000 $(optflags)
+hello.elf: $(app_objects) $(objects) sys/ebbrt.ld $(runtime_objects)
+	$(call quiet, $(CXX) $(LDFLAGS) -o $@ $(app_objects) $(objects) \
+		-T $(src)/sys/ebbrt.ld $(runtime_objects), LD $@)
+
+clean::
+	-$(RM) $(wildcard $(app_objects) hello.elf)
+\end{verbatim}
+\item small modification to build.mk...changed clean: to clean:: to allow extension
+\end{enumerate}
+
+So now I build this by running {\tt make -f hello.mk}. This produces hello.iso
+which contains a defined appmain:
+\begin{verbatim}
+jappavoo@kd-sesa:~/Work/EbbRT-baremetal/build/opt$ nm hello.elf | grep appmain
+0000000000118000 T _Z7appmainv
+\end{verbatim}
+However running make allow against the default Makefile creates the standard ebbrt.iso with appmain left as an undefined weak:
+\begin{verbatim}
+jappavoo@kd-sesa:~/Work/EbbRT-baremetal/build/opt$ nm ebbrt.elf | grep appmain
+                 w _Z7appmainv
+\end{verbatim}
+
+Running hello.iso (eg. {\tt NETWORKING="" ~/Work/ebbrt-contrib/scripts/qbm hello.iso}) produces the desired effect:
+\begin{verbatim}
+...
+Core 1 online
+System initialization complete
+Hello World!!!
+\end{verbatim}
+
+and running ebbrt.iso (eg. {\tt NETWORKING="" ~/Work/ebbrt-contrib/scripts/qbm})
+produces:
+\begin{verbatim}
+Core 1 online
+System initialization complete
+No appmain found...
+\end{verbatim}
+
+\subsection{Hello App in its own standalone directory}
+To lazy to do this one now
+
+\subsection{Hello App with and Ebb}
+
+
+
+
+
+
 
  
 \end{document}
