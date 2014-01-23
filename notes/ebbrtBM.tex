@@ -302,7 +302,85 @@ No appmain found...
 \end{verbatim}
 
 \subsection{Hello App in its own standalone directory}
-To lazy to do this one now
+
+Did two attempts at this.  First was trivial approach but I was not really happy with the outcome.  So I did something that required a little more surgery on the current build.mk.
+\begin{enumerate}
+\item modified build.mk:
+\begin{quotation}
+Removed explicit targets for ebbrt.elf, ebbrt.elf.stripped and ebbrt.iso and added default rules for \%.elf, \%.elf.stripped, \%.iso.  I also removed default all target, added a .PRECIOUS directive to ensure all intermediates are preserved (this should also help
+interactions with .depend files on initial build), added a reset of the .DEFAULT\_GOAL at the end of the file.  All these changes are to make build.mk more friendly to inclusion.   
+\end{quotation}
+\item modified opt/Makefile and debug/Makefile:
+\begin{quotation}
+Added following two lines at the bottom of both
+\begin{verbatim}
+.PHONY: all
+all: ebbrt.iso
+\end{verbatim}
+\item Now my out of source application build infrastructure looks like this:
+\begin{verbatim}
+./apps:
+hello
+./apps/hello:
+bm
+./apps/hello/bm:
+build  ebbrtbm.mk  src
+./apps/hello/bm/build:
+debug  Makefile  opt
+./apps/hello/bm/build/debug:
+Makefile
+./apps/hello/bm/build/opt:
+Makefile
+./apps/hello/bm/src:
+hello.cpp
+\end{verbatim}
+Where the apps directory is a sub directory of my ebbrt-contrib repo. Hello is a sub dir which splits for baremetal and then the debug levels.  src/hello.cpp is my common application source.  ebbrt.mk is a common make file that contains the setup to a ebbrt source tree and then the build/debug/Makefile and build/opt/Makefile define the build for the particular optimization flags.
+\end{quotation}
+\end{enumerate}
+To build things one simple runs make in the appropriate subdir specifying the location of the ebbrtbm source eg:
+{\tiny
+\begin{verbatim}
+~/Work/ebbrt-contrib/apps/hello/bm/build/opt$ EBBRT_SRCDIR=~/Work/EbbRT-baremetal make
+\end{verbatim}
+}
+\newpage
+The Makefiles are as follows:
+\begin{verbatim}
+bm/ebbrtbm.mk
+ifeq ($(strip ${EBBRT_SRCDIR}),)
+ $(error You must set EBBRT_SRCDIR to the path of an EbbRT source tree)
+endif
+src = ${EBBRT_SRCDIR}
+VPATH = ${EBBRT_SRCDIR}:../../src
+
+ifeq ($(strip ${EBBRT_OPTFLAGS}),)
+ $(error You must set EBBRT_OPTFLAGS as you need. eg. -g3 -O4 -flto -DNDEBUG for an optimized build or -g3 -O0 for a non-optimized debug build)
+endif
+
+optflags = ${EBBRT_OPTFLAGS}
+include ${EBBRT_SRCDIR}/build.mk
+--------
+opt/Makefile
+EBBRT_OPTFLAGS=-g3 -O4 -flto -DNDEBUG
+app_objects = hello.o
+
+include ../../ebbrtbm.mk
+
+.PHONY: all
+all: hello.iso
+----
+debug/Makefile
+EBBRT_OPTFLAGS=-g3 -O0
+app_objects = hello.o
+
+include ../../ebbrtbm.mk
+
+.PHONY: all
+all: hello.iso
+\end{verbatim}
+
+With this I get a simple model for an app which has its own source and build dirs
+and easily produces a baremetal image.
 
 \subsection{Hello App with and Ebb}
 
