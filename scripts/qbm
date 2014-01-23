@@ -1,0 +1,21 @@
+#!/bin/bash
+
+NETWORKING=${NETWORKING-"-net nic,model=virtio \
+-net vde,sock=/tmp/vde_switch0"}
+CDROM=${CDROM:-ebbrt.iso}
+
+if [[ -n $1 ]]; then 
+CDROM=$1
+fi
+
+exec qemu-system-x86_64 \
+-m 2G \
+-numa node,cpus=0,mem=1G \
+-numa node,cpus=1,mem=1G \
+-smp sockets=2 \
+-cpu host \
+-gdb tcp::1235 \
+-enable-kvm \
+$NETWORKING \
+-nographic \
+-cdrom $CDROM
