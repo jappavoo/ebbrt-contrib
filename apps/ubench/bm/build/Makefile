@@ -4,4 +4,4 @@
 
 all:
 	make -C debug -j8
-	make -C opt -j8
+	make -C opt  -j8

@@ -1,8 +1,7 @@
 #include <sys/debug.hpp>
 
-using namespace ebbrt;
-
 void appmain()
 {
-  kprintf("Hello World!!!\n"); 
+  ebbrt::kprintf("Hello World!!!\n"); 
 }
+
