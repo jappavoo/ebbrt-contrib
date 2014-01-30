@@ -1,4 +1,4 @@
-#include <sys/debug.hpp>
+#include <ebbrt/Debug.h>
 
 void appmain()
 {
