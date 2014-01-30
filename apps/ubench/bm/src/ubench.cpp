@@ -1,4 +1,4 @@
-#include <sys/debug.hpp>
+#include <ebbrt/Debug.h>
 #include <stdint.h>
 #include <inttypes.h>
 #include <assert.h>
