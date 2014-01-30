@@ -139,7 +139,7 @@ HeapCounterTest()
 
 void appmain(char *cmdline)
 {
-  kprintf("ubench: BEGIN\n");
+  kprintf("ubench: BEGIN: %p\n", cmdline);
   
   // Base line C++ method dispatch numbers 
   for (int i=0; i<REPEAT_CNT; i++) {
