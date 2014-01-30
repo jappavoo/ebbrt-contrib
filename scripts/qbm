@@ -1,21 +1,117 @@
 #!/bin/bash
+USAGE="$0 <iso|elf> [cmdline args if elf]"
 
-NETWORKING=${NETWORKING-"-net nic,model=virtio \
--net vde,sock=/tmp/vde_switch0"}
-CDROM=${CDROM:-ebbrt.iso}
-
-if [[ -n $1 ]]; then 
-CDROM=$1
-fi
-
-exec qemu-system-x86_64 \
--m 2G \
+QBM_MACHINE_CONFIG=${QBM_MACHINE_CONFIG-"-m 2G \
 -numa node,cpus=0,mem=1G \
 -numa node,cpus=1,mem=1G \
 -smp sockets=2 \
--cpu host \
--gdb tcp::1235 \
+-cpu host"}
+
+QBM_NETWORKING=${QBM_NETWORKING-"-net nic,model=virtio \
+-net vde,sock=/tmp/vde_switch0"}
+QBM_DEBUGGING=${QBM_DEBUGGING-"-gdb tcp::1235"}
+QBM_IMG=${QBM_IMG:-ebbrt.iso}
+
+if [[ -z $QBM_ISODIR ]]; then
+  QBM_ISODIR=qbm.$$
+  QBM_CLEANUP=${QBM_CLEANUP-1}
+else
+  QBM_CLEANUP=${QBM_CLEANUP-""}
+fi
+
+if [[ -n $1 ]]; then 
+  QBM_IMG=$1
+fi
+shift
+CMDLINE="$@"
+
+if [[ ! -a $QBM_IMG ]]; then
+  echo "ERROR: $QBM_IMG does not exist" > /dev/stderr
+  echo $USAGE > /dev/stderr
+  exit -1
+fi
+
+
+
+function dostrip 
+{
+   mkdir $QBM_ISODIR
+   strip -s $1 -o $2
+}
+
+function doiso
+{
+  mkdir -p $QBM_ISODIR
+  
+  cat > $QBM_ISODIR/grub.cfg <<EOF
+set default=0
+set timeout=0
+
+menuentry "EbbRT" {
+          multiboot /boot/ebbrt $CMDLINE
+          boot 
+}
+EOF
+  if ! grub-mkrescue -o $2 -graft-points boot/ebbrt=$1 boot/grub/grub.cfg=$QBM_ISODIR/grub.cfg
+  then
+    echo "ERROR: failed to create $2" > /dev/stderr
+    exit -1
+  fi
+}
+
+
+
+if [[ -a $QBM_ISODIR ]]; then
+  echo "YIKES $QBM_ISODIR exists was not expecting that. Try again ;-\)" > /dev/stderr
+  exit -1
+fi
+
+echo $(file $QBM_IMG)
+case $(file $QBM_IMG) in
+*:\ x86\ boot\ sector*) 
+	echo $QBM_IMG is bootable using it directly > /dev/stderr
+        CDROM=$QBM_IMG
+        if (( $# > 1 )); then
+          echo "ERROR: command line arguments not supported when bootable image is specified. You must use and ELF image" > /dev/stderr
+          exit -1
+        fi
+        ;;
+
+*:\ ELF\ 64-bit\ *statically\ linked,\ not\ stripped) 
+        echo $QBM_IMG unstripped elf ... stripping > /dev/stderr
+	dostrip $QBM_IMG $QBM_ISODIR/${QBM_IMG##*/}.stripped
+	QBM_IMG=${QBM_ISODIR}/${QBM_IMG##*/}.stripped
+        echo "$QBM_ISODIR/$QBM_IMG created" > /dev/stderr
+        ;&
+
+*:\ ELF\ 64-bit\ *statically\ linked,\ stripped)
+        echo $QBM_IMG stripped elf ... creating iso > /dev/stderr
+        CDROM=${QBM_IMG##*/}
+        CDROM=$QBM_ISODIR/${CDROM%%.*}.iso
+        doiso $QBM_IMG $CDROM
+        echo "$CDROM created" > /dev/stderr
+        if [[ -z $QBM_CLEANUP ]];
+        then
+           echo "$CDROM will NOT be removed when qemu is done"
+        fi
+        ;;
+
+*) echo "ERROR: $QBM_IMG unsupported image type" > /dev/stderr
+   exit -1
+   ;;
+esac
+
+
+
+qemu-system-x86_64 \
+$QBM_MACHINE_CONFIG \
+$QBM_DEBUGGING \
 -enable-kvm \
-$NETWORKING \
+$QBM_NETWORKING \
 -nographic \
 -cdrom $CDROM
+
+if [[ -n $QBM_CLEANUP ]]; then
+  echo "cleanup up $QBM_ISODIR to disable set QBM_CLEANUP=\"\""
+  rm -rf $QBM_ISODIR
+fi
