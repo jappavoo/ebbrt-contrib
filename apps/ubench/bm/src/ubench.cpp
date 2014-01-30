@@ -137,7 +137,7 @@ HeapCounterTest()
 	  __PFUNC__, 1, (end - start));
 }
 
-void appmain()
+void appmain(char *cmdline)
 {
   kprintf("ubench: BEGIN\n");
   
