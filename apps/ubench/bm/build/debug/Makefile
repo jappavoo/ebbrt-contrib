@@ -1,6 +1,6 @@
 EBBRT_OPTFLAGS=-g3 -O0
-app_objects = hello.o
-target=hello
+app_objects = ubench.o
+target=ubench
 
 include ../../ebbrtbm.mk
 
