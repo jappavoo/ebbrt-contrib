@@ -137,7 +137,6 @@ if [[ -a $QBM_DIR ]]; then
   exit -1
 fi
 
-echo $(file $QBM_IMG)
 case $(file $QBM_IMG) in
 *:\ x86\ boot\ sector*) 
 	echo $QBM_IMG is bootable using it directly > /dev/stderr
