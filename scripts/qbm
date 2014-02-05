@@ -1,5 +1,6 @@
 #!/bin/bash
-USAGE="$0 <iso|elf> [cmdline args if elf]"
+#set -x
+USAGE="$0 <iso|elf|elf.stripped|elf32> [cmdline args if elf]"
 
 QBM_MACHINE_CONFIG=${QBM_MACHINE_CONFIG-"-m 2G \
 -numa node,cpus=0,mem=1G \
@@ -9,11 +10,40 @@ QBM_MACHINE_CONFIG=${QBM_MACHINE_CONFIG-"-m 2G \
 
 QBM_NETWORKING=${QBM_NETWORKING-"-net nic,model=virtio \
 -net vde,sock=/tmp/vde_switch0"}
-QBM_DEBUGGING=${QBM_DEBUGGING-"-gdb tcp::1235"}
+QBM_DEBUGGING=${QBM_DEBUGGING-"-gdb tcp::2936"}
 QBM_IMG=${QBM_IMG:-ebbrt.iso}
 
-if [[ -z $QBM_ISODIR ]]; then
-  QBM_ISODIR=qbm.$$
+QBM_NETCONFIG_METHOD=${QBM_NETCONFIG_METHOD-"DHCP"}
+QBM_IPADDR=${QBM_IPADDR-""}
+QBM_NETMASK=${QBM_NETMASK-""}
+QBM_GW=${QBM_GW-""}
+
+NET_FDT="
+            networking {
+               eth0.method  = \"${QBM_NETCONFIG_METHOD}\";
+               eth0.ip      = [ $(printf "%02x %02x %02x %02x" ${QBM_IPADDR//./ }) ];
+               eth0.netmask = [ $(printf "%02x %02x %02x %02x" ${QBM_NETMASK//./ }) ];
+               defaultgw    = [ $(printf "%02x %02x %02x %02x" ${QBM_GW//./ }) ];
+            };
+"
+
+QBM_RT_ADDR=${QBM_RT_ADDR-""}
+QBM_RT_PORT=${QBM_RT_PORT-""}
+RT_FDT="
+            runtime {
+              addr = [ $(printf "%02x %02x %02x %02x" ${QBM_RT_ADDR//./ }) ];
+              port = /bits/ 16 < ${QBM_RT_PORT} >; 
+            };
+"
+
+
+if [[ -z $QBM_NETWORKING ]]; then
+  unset NET_FDT
+  unset RT_FDT
+fi
+
+if [[ -z $QBM_DIR ]]; then
+  QBM_DIR=qbm.$$
   QBM_CLEANUP=${QBM_CLEANUP-1}
 else
   QBM_CLEANUP=${QBM_CLEANUP-""}
@@ -23,7 +53,14 @@ if [[ -n $1 ]]; then
   QBM_IMG=$1
 fi
 shift
-CMDLINE="$@"
+
+for arg in "$@"; do
+  if [[ -z $CMDLINE ]]; then 
+    CMDLINE="$(printf '%q' "$arg")"
+  else
+    CMDLINE="$CMDLINE $(printf '%q' "$arg")"
+  fi
+done
 
 if [[ ! -a $QBM_IMG ]]; then
   echo "ERROR: $QBM_IMG does not exist" > /dev/stderr
@@ -33,17 +70,23 @@ fi
 
 
 
-function dostrip 
+function mkstrip 
 {
-   mkdir $QBM_ISODIR
+   mkdir $QBM_DIR
    strip -s $1 -o $2
 }
 
-function doiso
+function mkelf32
 {
-  mkdir -p $QBM_ISODIR
+  mkdir -p $QBM_DIR
+  objcopy -O elf32-i386 $1 $2
+}
+
+function mkiso
+{
+  mkdir -p $QBM_DIR
   
-  cat > $QBM_ISODIR/grub.cfg <<EOF
+  cat > $QBM_DIR/grub.cfg <<EOF
 set default=0
 set timeout=0
 
@@ -59,9 +102,37 @@ EOF
   fi
 }
 
+function mkebbrtdtb
+{
+  local dir=${1}/
+  mkdir -p $dir
+  printenv -0 > ${dir}environ.bin
 
+  cat > ${dir}ebbrt.dts <<EOF
+/dts-v1/;  // DTS source version 1 -- required to indicate version 1 -- only version supported 
+           // by dtc
 
-if [[ -a $QBM_ISODIR ]]; then
+/ {
+     /* http://www.devicetree.org/Device_Tree_Usage:
+        chosen Node
+        The chosen node doesn't represent a real device, but serves 
+        as a place for passing data between firmware and the operating system, like boot arguments. 
+        Data in the chosen node does not represent the hardware. Typically the chosen node is left 
+        empty in .dts source files and populated at boot time. */
+        choosen {
+          ebbrt {
+            cmdline = "$IMG $CMDLINE";
+            environ = /incbin/("environ.bin");
+            ${NET_FDT}
+            ${RT_FDT}
+          };
+        };
+};
+EOF
+  dtc -I dts -O dtb -o ${dir}ebbrt.dtb ${dir}ebbrt.dts 
+}
+
+if [[ -a $QBM_DIR ]]; then
   echo "YIKES $QBM_ISODIR exists was not expecting that. Try again ;-\)" > /dev/stderr
   exit -1
 fi
@@ -70,7 +141,8 @@ echo $(file $QBM_IMG)
 case $(file $QBM_IMG) in
 *:\ x86\ boot\ sector*) 
 	echo $QBM_IMG is bootable using it directly > /dev/stderr
-        CDROM=$QBM_IMG
+        IMG=$QBM_IMG
+        IMGTYPE=iso
         if (( $# > 1 )); then
           echo "ERROR: command line arguments not supported when bootable image is specified. You must use and ELF image" > /dev/stderr
           exit -1
@@ -79,23 +151,29 @@ case $(file $QBM_IMG) in
 
 *:\ ELF\ 64-bit\ *statically\ linked,\ not\ stripped) 
         echo $QBM_IMG unstripped elf ... stripping > /dev/stderr
-	dostrip $QBM_IMG $QBM_ISODIR/${QBM_IMG##*/}.stripped
-	QBM_IMG=${QBM_ISODIR}/${QBM_IMG##*/}.stripped
-        echo "$QBM_ISODIR/$QBM_IMG created" > /dev/stderr
+	mkstripped $QBM_IMG $QBM_DIR/${QBM_IMG##*/}.stripped
+	QBM_IMG=${QBM_DIR}/${QBM_IMG##*/}.stripped
+        echo "$QBM_DIR/$QBM_IMG created" > /dev/stderr
         ;&
 
 *:\ ELF\ 64-bit\ *statically\ linked,\ stripped)
-        echo $QBM_IMG stripped elf ... creating iso > /dev/stderr
-        CDROM=${QBM_IMG##*/}
-        CDROM=$QBM_ISODIR/${CDROM%%.*}.iso
-        doiso $QBM_IMG $CDROM
-        echo "$CDROM created" > /dev/stderr
+	mkelf32 $QBM_IMG $QBM_DIR/${QBM_IMG##*/}.elf32
+	$QBM_IMG=$QBM_DIR/${QBM_IMG##*/}.elf32
         if [[ -z $QBM_CLEANUP ]];
         then
-           echo "$CDROM will NOT be removed when qemu is done"
+           echo "$QBM_DIR will NOT be removed when qemu is done"
+        fi
+        ;&
+
+*:\ ELF\ 32-bit\ *statically\ linked,\ stripped)
+        IMG=$QBM_IMG
+        IMGTYPE=elf32
+        mkebbrtdtb $QBM_DIR
+        if [[ -z $QBM_CLEANUP ]];
+        then
+           echo "$QBM_DIR will NOT be removed when qemu is done"
         fi
         ;;
-
 *) echo "ERROR: $QBM_IMG unsupported image type" > /dev/stderr
    exit -1
    ;;
@@ -103,13 +181,25 @@ esac
 
 
 
-qemu-system-x86_64 \
-$QBM_MACHINE_CONFIG \
-$QBM_DEBUGGING \
--enable-kvm \
-$QBM_NETWORKING \
--nographic \
--cdrom $CDROM
+if [[ $imgtype = "iso" ]]; then 
+  qemu-system-x86_64 \
+  $QBM_MACHINE_CONFIG \
+  $QBM_DEBUGGING \
+  -enable-kvm \
+  $QBM_NETWORKING \
+  -nographic \
+  -cdrom $IMG
+else
+  qemu-system-x86_64 \
+  $QBM_MACHINE_CONFIG \
+  $QBM_DEBUGGING \
+  -enable-kvm \
+  $QBM_NETWORKING \
+  -nographic \
+  -kernel $IMG \
+  -initrd $QBM_DIR/ebbrt.dtb \
+  -append "$CMDLINE"
+fi
 
 if [[ -n $QBM_CLEANUP ]]; then
   echo "cleanup up $QBM_ISODIR to disable set QBM_CLEANUP=\"\""
