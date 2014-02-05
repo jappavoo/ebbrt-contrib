@@ -9,16 +9,17 @@ ifeq ($(strip ${EBBRT_OPTFLAGS}),)
 endif	
 
 optflags = ${EBBRT_OPTFLAGS}
+optflags += -D__EBBRT_BM__ -I../../src -I../../../../src/bm
 include $(baremetal)/build.mk
 
-VPATH += ../../src
+VPATH += ../../src:../../../../src/bm
 
 .PRECIOUS: $(app_objects)
 .PHONY: all distclean
 
 $(info $(.PRECIOUS))
 
-all: $(target).iso
+all: $(target).elf32
 
 distclean: clean
 	-$(RM) -rf $(wildcard include ext sys src $(app_objects) $(target).*)
