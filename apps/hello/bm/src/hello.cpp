@@ -1,10 +1,11 @@
 #include <ebbrt/Debug.h>
 #include <argv.h>
 
-void appmain(char *cmdline)
+void AppMain()
 {
   char **argv;
   int argc;
+  char *cmdline = NULL;
 
   ebbrt::kprintf("Hello World!!!\n"); 
 

@@ -8,7 +8,7 @@ ebbrt_hostedinc = ${EBBRT_SRCDIR}/hosted/src/include
 ebbrt_commoninc = ${EBBRT_SRCDIR}/common/src/include 
 
 ifeq ($(strip ${EBBRT_BUILDTYPE}),Debug)
-  OPTFLAGS ?= -O2 -g
+  OPTFLAGS ?= -O0 -g
 else ifeq ($(strip ${EBBRT_BUILDTYPE}),Release)
   OPTFLAGS ?= -O2
 else 
@@ -40,7 +40,7 @@ app_objects := $(app_sources:.cc=.o)
 
 ${target}: $(app_objects) $(ebbrt_lib) $(bm_imgs)
 	$(CXX) $(OPTFLAGS)  -Wl,--whole-archive $(app_objects) $(ebbrt_lib) -Wl,--no-whole-archive \
-	-lboost_filesystem -lboost_system -lcapnp -lkj -lfdt -pthread -o $@
+	-lboost_filesystem -lboost_system -lcapnp -lkj -lfdt -ltbb -pthread -o $@
 	@echo CREATED: $(abspath ${target})
 
 ${ebbrt_libdir}:

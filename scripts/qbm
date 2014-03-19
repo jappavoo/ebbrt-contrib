@@ -181,7 +181,7 @@ esac
 
 
 if [[ $imgtype = "iso" ]]; then 
-  qemu-system-x86_64 \
+  echo qemu-system-x86_64 \
   $QBM_MACHINE_CONFIG \
   $QBM_DEBUGGING \
   -enable-kvm \
@@ -189,7 +189,7 @@ if [[ $imgtype = "iso" ]]; then
   -nographic \
   -cdrom $IMG
 else
-  qemu-system-x86_64 \
+  echo qemu-system-x86_64 \
   $QBM_MACHINE_CONFIG \
   $QBM_DEBUGGING \
   -enable-kvm \

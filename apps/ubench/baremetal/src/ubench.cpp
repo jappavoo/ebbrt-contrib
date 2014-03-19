@@ -7,6 +7,8 @@
 #include <unistd.h>
 #include <cctype>
 
+#include "../../src/Unix.h"
+
 #define __FUNC__ __FUNCTION__
 #define __PFUNC__ __PRETTY_FUNCTION__
 
@@ -196,10 +198,14 @@ int processargs(int argc, char **argv)
   return 0;
 }
 
-void appmain(char *cmdline)
+void AppMain()
 {
   int argc;
   char **argv;
+
+  UNIX::Init();
+
+  char *cmdline = NULL;
 
   ebbrt::kprintf("ubench: BEGIN: %s\n", cmdline);
 
