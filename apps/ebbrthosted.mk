@@ -10,7 +10,7 @@ ebbrt_commoninc = ${EBBRT_SRCDIR}/common/src/include
 ifeq ($(strip ${EBBRT_BUILDTYPE}),Debug)
   OPTFLAGS ?= -O0 -g
 else ifeq ($(strip ${EBBRT_BUILDTYPE}),Release)
-  OPTFLAGS ?= -O2
+  OPTFLAGS ?= -O4 -flto
 else 
   $(error EBBRT_BUILDTYPE must be set to either Debug or Release)
 endif
@@ -40,7 +40,8 @@ app_objects := $(app_sources:.cc=.o)
 
 ${target}: $(app_objects) $(ebbrt_lib) $(bm_imgs)
 	$(CXX) $(OPTFLAGS)  -Wl,--whole-archive $(app_objects) $(ebbrt_lib) -Wl,--no-whole-archive \
-	-lboost_filesystem -lboost_system -lcapnp -lkj -lfdt -ltbb -pthread -o $@
+	-lboost_coroutine -lboost_context -lboost_filesystem -lboost_system \
+	-lcapnp -lkj -lfdt -ltbb  -pthread -o $@
 	@echo CREATED: $(abspath ${target})
 
 ${ebbrt_libdir}:
@@ -50,7 +51,7 @@ ${ebbrt_libdir}/Makefile: ${ebbrt_libdir}
 	(cd $(ebbrt_libdir); cmake -DCMAKE_BUILD_TYPE=${EBBRT_BUILDTYPE} ${ebbrt_hosted})
 
 ${ebbrt_lib}: ${ebbrt_libdir}/Makefile
-	make -C ${ebbrt_libdir} 
+	$(MAKE) -C ${ebbrt_libdir} 
 
 ${bm_imgdir}: 
 	mkdir ${bm_imgdir}
@@ -59,7 +60,7 @@ ${bm_imgs}: ${bm_imgdir} ${EBBRT_BM_IMGS}
 	cp ${EBBRT_BM_IMGS}.elf* ${bm_imgdir}
 
 ${EBBRT_BM_IMGS}:
-	make -C $(dir $@)
+	$(MAKE) -C $(dir $@)
 
 .PHONY: distclean
 

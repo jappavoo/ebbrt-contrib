@@ -12,12 +12,11 @@
 
 #include "../../src/Unix.h"
 
+
 int 
 main(int argc, char **argv)
 {
-
   printf("Hello World!!!\n");
-
   auto bindir = boost::filesystem::system_complete(argv[0]).parent_path() /
     "/bm/ubench.elf32";
 
@@ -30,11 +29,17 @@ main(int argc, char **argv)
     // ensure clean quit on ctrl-c
     sig.async_wait([&c](const boost::system::error_code& ec,
                         int signal_number) { c.io_service_.stop(); });
-    ebbrt::EbbRef<UNIX::CmdLineArgs> cmdLine = 
-      UNIX::CmdLineArgs::Create(argc, (const char **)argv);
-    for (int i=0; i<cmdLine->argc(); i++) {
-      printf("argv[%d]=%s\n",i,cmdLine->argv(i));
+
+    UNIX::Init(argc, (const char **)argv);
+    for (int i=0; i<UNIX::cmd_line_args->argc(); i++) {
+      printf("argv[%d]=%s\n",i,UNIX::cmd_line_args->argv(i));
     }
+
+    for (int i=0; UNIX::environment->environ()[i]!=NULL; i++) {
+      printf("%d: ev=%s\n", i, UNIX::environment->environ()[i]);
+    }
+    printf("getenv(\"hello\")=%s\n", UNIX::environment->getenv("hello"));
+
     ebbrt::node_allocator->AllocateNode(bindir.string());
   }
 

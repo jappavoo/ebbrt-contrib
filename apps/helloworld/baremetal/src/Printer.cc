@@ -27,14 +27,8 @@ Printer& Printer::HandleFault(ebbrt::EbbId id) {
   auto f = ebbrt::global_id_map->Get(id);
   Printer* p;
   f.Then([&f, &context, &p](ebbrt::Future<std::string> inner) {
-      try {
-    p = new Printer(ebbrt::Messenger::NetworkId(inner.Get()));
-      } catch(std::exception& e) {
-	//
-      } catch(...) {
-	
-      }
-    ebbrt::event_manager->ActivateContext(context);
+      p = new Printer(ebbrt::Messenger::NetworkId(inner.Get()));
+      ebbrt::event_manager->ActivateContext(std::move(context));
   });
   ebbrt::event_manager->SaveContext(context);
   auto inserted = ebbrt::local_id_map->Insert(std::make_pair(id, p));

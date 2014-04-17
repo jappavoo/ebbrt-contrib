@@ -9,24 +9,27 @@
 #include "Unix.h"
 
 #ifndef __EBBRT_BM__
-ebbrt::Future<ebbrt::EbbRef<UNIX::CmdLineArgs>>
-UNIX::CmdLineArgs::Init(int argc, const char **argv)
+ebbrt::Future<ebbrt::EbbRef<UNIX::Environment>>
+UNIX::Environment::Init()
 {
   std::string str;
 
-  for (int i=0; i<argc; i++) {
-    str.append(argv[i]);
+  for (int i=0; ::environ[i]!=NULL; i++) {
+    str.append(::environ[i]);
     str.push_back(0);
   }  
-  return ebbrt::global_id_map->Set(kCmdLineArgsId, std::move(str))
+  return ebbrt::global_id_map->Set(kEnvironmentId, std::move(str))
       .Then([](ebbrt::Future<void> f) {
         f.Get();
-        return ebbrt::EbbRef<CmdLineArgs>(kCmdLineArgsId);
+        return ebbrt::EbbRef<Environment>(kEnvironmentId);
       });
 }
 #endif
 
-UNIX::CmdLineArgs::CmdLineArgs(Root *root) : myRoot_(root) 
+#ifndef __EBBRT_BM__ 
+UNIX::Environment::Environment(Root *root) : myRoot_(root), environ_(NULL) {}
+#else
+UNIX::Environment::Environment(Root *root) : myRoot_(root), environ_(NULL)
 {
   // add code here to initialized argc and argv from root data pointer
   auto fstr = myRoot_->getString();
@@ -34,24 +37,27 @@ UNIX::CmdLineArgs::CmdLineArgs(Root *root) : myRoot_(root)
   std::string str = fstr.Get();
   const char *data = str.data();
   int len = str.size();
-  int i,j;
+  int i,j,numvar;
 
-  argc_ = 0;
-  for (i=0; i<len; i++) if (data[i] == 0) argc_++;
+  numvar = 0;
+  for (i=0; i<len; i++) if (data[i] == 0) numvar++;
 
-  argv_vector.reserve(argc_);
-  for (i=0,j=1,argv_vector.emplace_back((char *)data); j < argc_; i++) {
-    if (data[i] == 0) { argv_vector.emplace_back((char *)&(data[i+1]));  j++; }  
+  environ_ = (char **)malloc(sizeof(char *)*numvar);
+  environ_[numvar] = NULL;
+
+  for (i=0,j=1,environ_[0]=(char *)data; j < numvar; i++) {
+    if (data[i] == 0) { environ_[j]=(char *)&(data[i+1]);  j++; }  
   }
+  ::environ = environ_;
+}
+#endif
 
+UNIX::Environment::Root::Root() : theRep_(NULL)  {
+  data_ = ebbrt::global_id_map->Get(kEnvironmentId).Share();
 }
 
-UNIX::CmdLineArgs::Root::Root() : theRep_(NULL)  {
-  data_ = ebbrt::global_id_map->Get(kCmdLineArgsId).Share();
-}
-
-UNIX::CmdLineArgs *
-UNIX::CmdLineArgs::Root::getRep_BIN() {
+UNIX::Environment *
+UNIX::Environment::Root::getRep_BIN() {
   std::lock_guard<std::mutex> lock{lock_};
   if (theRep_) return theRep_; // implicity drop lock
 
@@ -64,7 +70,7 @@ UNIX::CmdLineArgs::Root::getRep_BIN() {
   lock_.lock();     // reaquire lock
   if (theRep_ == NULL)  { 
     // now that we are ready create the rep if necessary
-    theRep_ = new CmdLineArgs(this);
+    theRep_ = new Environment(this);
   }
   return theRep_;      // implicity drop lock
 }
@@ -90,8 +96,8 @@ UNIX::CmdLineArgs::Root::getRep_BIN() {
 //                Map.erase(acc);
 //        }
 // }
-UNIX::CmdLineArgs & 
-UNIX::CmdLineArgs::HandleFault(ebbrt::EbbId id) {
+UNIX::Environment & 
+UNIX::Environment::HandleFault(ebbrt::EbbId id) {
  retry:
   {
     ebbrt::LocalIdMap::ConstAccessor rd_access;
@@ -103,7 +109,7 @@ UNIX::CmdLineArgs::HandleFault(ebbrt::EbbId id) {
       rd_access.release();  // drop lock
       // NO LOCKS;
       auto &rep = *(root.getRep_BIN());   // this may block internally
-      ebbrt::EbbRef<CmdLineArgs>::CacheRef(id, rep);
+      ebbrt::EbbRef<Environment>::CacheRef(id, rep);
       // The sole exit path out of handle fault
       return rep; // drop rd_access lock by exiting outer scope
     }
@@ -125,4 +131,4 @@ UNIX::CmdLineArgs::HandleFault(ebbrt::EbbId id) {
 }
 
 
-void UNIX::CmdLineArgs::destroy() { ebbrt::kabort(); }
+void UNIX::Environment::destroy() { ebbrt::kabort(); }

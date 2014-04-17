@@ -6,73 +6,89 @@
 #define __UNIX_EBBRT_H__
 
 #include <ebbrt/Messenger.h>
-
 #include <ebbrt/Runtime.h>
+#include <ebbrt/Future.h>
+
+#include "StaticEbbIds.h"
 
 namespace UNIX {
-  extern ebbrt::Messenger::NetworkId fe;
-  static void Init() {
-    // assert runtime initialized
-#ifdef __BAREMETAL__
-    fe = ebbrt::Messenger::NetworkId(ebbrt::runtime::Frontend());
-#endif
-  }
-#if 0
-  class MasterEbb : public ebbrt::StaticSharedEbb<MasterEbb>,
-		    public ebbrt::Messagable<MasterEbb> { 
+  class CmdLineArgs {      
   public:
-    void ReceiveMessage(ebbrt::Messenger::NetworkId nid,
-			std::unique_ptr<ebbrt::IOBuf>&& buffer);
-  }
-
-  class CmdLineArgs {
-    
-  public:
-    Class Replica  {
-      char **argv;
-      int argc;
-    protected:
-      replicate();
-    public:
-      char *argv(int i) { return argv[i]; }
-      int argc() { return argc; }
-    };
-
-    Class Master : public MasterEbb,
-		   public Replica {
-    public:
-    };
-
-    Class Drone : public DroneEbb<Drone>
-		  public Replica {
-    };
-#endif
-#if 1
-    class CmdLineArgs {      
-    public:
-      typedef std::unique_ptr<ebbrt::IOBuf> RootDataPtr;	
-      struct Root {
-	std::atomic<intptr_t> theRep_;
-	RootDataPtr data_;
-      }; 
+    class Root {
     private:
-      // Representative Members
-      Root *myRoot_;
-      // FIXME: I think this really should be a std::unique_ptr but dont' know
-      // how
-      std::vector<char *> argv_vector;
-      //    std:unique_ptr<char *>char argv_[];
-      int argc_;
-      // Private Constrtor called by HandleFault
-      CmdLineArgs(Root *root);
+      std::mutex lock_;                        
+      CmdLineArgs *theRep_;
+      ebbrt::SharedFuture<std::string> data_;
     public:
-      static CmdLineArgs & HandleFault(ebbrt::EbbId id);
-      static ebbrt::EbbRef<CmdLineArgs> Create(int argc, const char **argv);
-      void destroy();
-      char *argv(int i) { return argv_vector[i]; }
-      int argc() { return argc_; }
-    };
+      Root();
+      CmdLineArgs * getRep_BIN();
+      ebbrt::SharedFuture<std::string> getString() { return data_; }
+    }; 
+  private:
+    // Representative Members
+    Root *myRoot_;
+    // FIXME: I think this really should be a std::unique_ptr but dont' know
+    // how
+    std::vector<char *> argv_vector;
+    //    std:unique_ptr<char *>char argv_[];
+    int argc_;
+    // Private Constrtor called by HandleFault
+      CmdLineArgs(Root *root);
+  public:
+    static CmdLineArgs & HandleFault(ebbrt::EbbId id);
+    static ebbrt::Future<ebbrt::EbbRef<CmdLineArgs>> Init(int argc, 
+							  const char **argv);
+    void destroy();
+    char *argv(int i) { return argv_vector[i]; }
+    int argc() { return argc_; }
+  };
+
+
+  class Environment {      
+  public:
+    class Root {
+    private:
+      std::mutex lock_;                        
+      Environment *theRep_;
+      ebbrt::SharedFuture<std::string> data_;
+    public:
+      Root();
+      Environment * getRep_BIN();
+      ebbrt::SharedFuture<std::string> getString() { return data_; }
+    }; 
+  private:
+    // Representative Members
+    Root *myRoot_;
+    char **environ_;
+    // Private Constrtor called by HandleFault
+      Environment(Root *root);
+  public:
+    static Environment & HandleFault(ebbrt::EbbId id);
+    static ebbrt::Future<ebbrt::EbbRef<Environment>> Init();
+    void destroy();
+
+    char **environ() { return ::environ; }
+    char *getenv(const char *name) { return ::getenv(name); }
+    int putenv(char *string) { return ::putenv(string); }
+
+  };
+
+
+  extern ebbrt::Messenger::NetworkId fe;
+
+#ifdef __EBBRT_BM__
+  __attribute__ ((unused)) static void Init() {
+    fe = ebbrt::Messenger::NetworkId(ebbrt::runtime::Frontend());
+  }
+#else
+  __attribute__ ((unused)) static void Init(int argc, const char **argv) {
+    CmdLineArgs::Init(argc, argv).Block();
+    Environment::Init().Block();
+  }
 #endif
+
+    constexpr auto cmd_line_args = ebbrt::EbbRef<CmdLineArgs>(kCmdLineArgsId);
+    constexpr auto environment =  ebbrt::EbbRef<Environment>(kEnvironmentId);
 };
 
 #endif
