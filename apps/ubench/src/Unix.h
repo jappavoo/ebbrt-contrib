@@ -5,9 +5,11 @@
 #ifndef __UNIX_EBBRT_H__
 #define __UNIX_EBBRT_H__
 
+
 #include <ebbrt/Messenger.h>
 #include <ebbrt/Runtime.h>
 #include <ebbrt/Future.h>
+#include <ebbrt/Buffer.h>
 
 #include "StaticEbbIds.h"
 
@@ -73,13 +75,49 @@ namespace UNIX {
 
   };
 
+#ifndef __EBBRT_BM__
+  class InputStream;
+  extern InputStream *stdin;
+
+  class InputStream {
+  public:
+    static const size_t kBufferSize = 1024;
+  private:
+    int fd_;
+    size_t len_;
+    boost::asio::posix::stream_descriptor::bytes_readable asioAvail_;
+    boost::asio::posix::stream_descriptor *sd_;
+    bool doRead_;
+    char buffer_[kBufferSize];
+    std::size_t count_;
+    ebbrt::MovableFunction<void(std::unique_ptr<ebbrt::IOBuf>,size_t avail)> consumer_;
+    
+  void async_read_some();
+  public:
+    
+    InputStream(int fd);
+    
+    void  async_read_stop() { 
+      if (doRead_==false) return;
+      printf("\nStopping Streaming Read\n"); 
+      doRead_=false; 
+    }
+    
+    void async_read_start(ebbrt::MovableFunction<void(std::unique_ptr<ebbrt::IOBuf>,size_t avail)> consumer);
+    
+    static void Init() {
+      int fd = ::dup(STDIN_FILENO);
+      UNIX::stdin = new InputStream(fd);
+    }
+  };
+#endif
 
   extern ebbrt::Messenger::NetworkId fe;
-
+  
 #ifdef __EBBRT_BM__
   __attribute__ ((unused)) static void Init() {
-    fe = ebbrt::Messenger::NetworkId(ebbrt::runtime::Frontend());
-  }
+  fe = ebbrt::Messenger::NetworkId(ebbrt::runtime::Frontend());
+}
 #else
   __attribute__ ((unused)) static void Init(int argc, const char **argv) {
     CmdLineArgs::Init(argc, argv).Block();
