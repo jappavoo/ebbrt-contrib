@@ -4,6 +4,7 @@
 
 #include <boost/filesystem.hpp>
 
+#include <ebbrt/EbbId.h>
 #include <ebbrt/LocalIdMap.h>
 #include <ebbrt/GlobalIdMap.h>
 #include <ebbrt/StaticIds.h>
@@ -25,8 +26,8 @@ typedef ebbrt::IOBuf IOBuf;
 // also could use null_buffers() with async_read_some(null_buffers(), handler);
 namespace UNIX {
 
-  InputStream::Root::Root() : theRep_(NULL), members_(NULL) {
-    data_ = ebbrt::global_id_map->Get(kSInId).Share();
+InputStream::Root::Root(ebbrt::EbbId id) : myId_(id), theRep_(NULL), members_(NULL) {
+    data_ = ebbrt::global_id_map->Get(id).Share();
   }
 
   InputStream *
@@ -95,7 +96,7 @@ InputStream::HandleFault(ebbrt::EbbId id) {
   if (ebbrt::local_id_map->Insert(wr_access, id)) {
     // WRITE_LOCK HELD:  THIS HOLDS READERS FROM MAKING PROGESS
     //                   ONLY ONE WRITER EXITS
-    Root *root = new Root();
+    Root *root = new Root(id);
     wr_access->second = root;
     wr_access.release(); // WE CAN NOW DROP THE LOCK and retry as a normal reader
   }
@@ -110,7 +111,8 @@ InputStream::HandleFault(ebbrt::EbbId id) {
   void InputStream::destroy() { ebbrt::kabort(); }
 
 
-  ebbrt::Future<ebbrt::EbbRef<InputStream>> InputStream::Init()
+
+  ebbrt::Future<ebbrt::EbbRef<InputStream>> InputStream::InitSIn()
   {
     RootMembers members;
     members.fd = ::dup(STDIN_FILENO);

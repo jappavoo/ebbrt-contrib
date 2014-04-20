@@ -4,8 +4,8 @@
 namespace UNIX {
   enum : ebbrt::EbbId {
     kCmdLineArgsId = ebbrt::kFirstStaticUserId,
-      kEnvironmentId,
-      kSInId
+    kEnvironmentId,
+    kSInId
   };
 };
 

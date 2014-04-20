@@ -198,14 +198,10 @@ int process_img_args(int argc, char **argv)
   return 0;
 }
 
-#define printf ebbrt::kprintf
 
 
 void AppMain()
 {
-  int argc;
-  char **argv;
-
 
   UNIX::Init();
 
@@ -215,22 +211,33 @@ void AppMain()
   }
 
   for (int i=0; UNIX::environment->environ()[i]!=NULL; i++) {
-    printf("%d: ev=%s\n", i, UNIX::environment->environ()[i]);
+    ebbrt::kprintf("%d: ev=%s\n", i, UNIX::environment->environ()[i]);
   }
-  printf("getenv(\"hello\")=%s\n", UNIX::environment->getenv("hello"));
+  ebbrt::kprintf("getenv(\"hello\")=%s\n", UNIX::environment->getenv("hello"));
 
-  char *img_cmdline = NULL;
 
-  if (img_cmdline)  ebbrt::kprintf("ubench: BEGIN: %s\n", img_cmdline);
+#if 0
+  UNIX::sin->async_read_start([](std::unique_ptr<ebbrt::IOBuf> buf,size_t avail) {
+      ebbrt::kprintf("Async Read on STDIN\n");
+    });
+#endif
 
-  if (img_cmdline) {
-    string_to_argv(img_cmdline, &argc, &argv);
-    for (int i=0; i<argc; i++) {
+  {
+    int argc;
+    char **argv;
+    char *img_cmdline = NULL;
+    
+    if (img_cmdline)  ebbrt::kprintf("ubench: BEGIN: %s\n", img_cmdline);
+
+    if (img_cmdline) {
+      string_to_argv(img_cmdline, &argc, &argv);
+      for (int i=0; i<argc; i++) {
       ebbrt::kprintf("argc[%d]=%s\n", i, argv[i]);
+      }
+      if (process_img_args(argc, argv) == -1) return;
     }
-    if (process_img_args(argc, argv) == -1) return;
   }
-
+  
   // Base line C++ method dispatch numbers 
   for (int i=0; i<REPEAT_CNT; i++) {
     GlobalCounterTest();
@@ -247,6 +254,7 @@ void AppMain()
 
 
   // Multicore Numbers
+
   ebbrt::kprintf("ubench: END\n");
   return;
 }

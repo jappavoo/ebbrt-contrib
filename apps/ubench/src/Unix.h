@@ -18,11 +18,12 @@ namespace UNIX {
   public:
     class Root {
     private:
-      std::mutex lock_;                        
+      std::mutex lock_;
+      ebbrt::EbbId myId_;
       CmdLineArgs *theRep_;
       ebbrt::SharedFuture<std::string> data_;
     public:
-      Root();
+      Root(ebbrt::EbbId id);
       CmdLineArgs * getRep_BIN();
       ebbrt::SharedFuture<std::string> getString() { return data_; }
     }; 
@@ -50,7 +51,7 @@ namespace UNIX {
   public:
     class Root {
     private:
-      std::mutex lock_;                        
+      std::mutex lock_;
       Environment *theRep_;
       ebbrt::SharedFuture<std::string> data_;
     public:
@@ -89,17 +90,19 @@ namespace UNIX {
     // Kludge : not stable accross platforms
     class Root {
     private:
-      std::mutex lock_;                        
+      std::mutex lock_;  
+      ebbrt::EbbId myId_;                      
       InputStream *theRep_;
       ebbrt::SharedFuture<std::string> data_;
       RootMembers *members_;
     public:
-      Root();
+      Root(ebbrt::EbbId id);
       InputStream * getRep_BIN();
       ebbrt::SharedFuture<std::string> getString() { return data_; }
       int fd() { return members_->fd; }
       size_t len() { return members_->len; }
       RootMembers::FileTypes type() { return members_->type; }
+      ebbrt::EbbId myId() { return myId_; }
     }; 
     static const size_t kBufferSize = 1024;
   private:
@@ -122,25 +125,17 @@ namespace UNIX {
     void async_read_some();
   public:
     static InputStream & HandleFault(ebbrt::EbbId id);
-    static ebbrt::Future<ebbrt::EbbRef<InputStream>> Init();
+    static ebbrt::Future<ebbrt::EbbRef<InputStream>> InitSIn();
     void destroy();
 
-#ifdef __EBBRT_BM__    
-    void  async_read_stop() {}
-    
     void async_read_start(ebbrt::MovableFunction<void(std::unique_ptr<ebbrt::IOBuf>,
-						      size_t avail)> consumer) {}
-#else    
+						      size_t avail)> consumer);
+
     void  async_read_stop() { 
       if (doRead_==false) return;
       printf("\nStopping Streaming Read\n"); 
       doRead_=false; 
     }
-    
-    void async_read_start(ebbrt::MovableFunction<void(std::unique_ptr<ebbrt::IOBuf>,
-						      size_t avail)> consumer);
-    
-#endif
   };
 
   extern ebbrt::Messenger::NetworkId fe;
@@ -153,7 +148,7 @@ namespace UNIX {
   __attribute__ ((unused)) static void Init(int argc, const char **argv) {
     CmdLineArgs::Init(argc, argv).Block();
     Environment::Init().Block();
-    InputStream::Init().Block();
+    InputStream::InitSIn().Block();
   }
 #endif
 

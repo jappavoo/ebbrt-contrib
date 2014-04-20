@@ -52,8 +52,8 @@ UNIX::Environment::Environment(Root *root) : myRoot_(root), environ_(NULL)
 }
 #endif
 
-UNIX::Environment::Root::Root() : theRep_(NULL)  {
-  data_ = ebbrt::global_id_map->Get(kEnvironmentId).Share();
+UNIX::Environment::Root::Root() : theRep_(NULL) {
+ data_ = ebbrt::global_id_map->Get(kEnvironmentId).Share();
 }
 
 UNIX::Environment *

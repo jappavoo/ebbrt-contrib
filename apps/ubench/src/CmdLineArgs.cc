@@ -46,8 +46,8 @@ UNIX::CmdLineArgs::CmdLineArgs(Root *root) : myRoot_(root)
 
 }
 
-UNIX::CmdLineArgs::Root::Root() : theRep_(NULL)  {
-  data_ = ebbrt::global_id_map->Get(kCmdLineArgsId).Share();
+UNIX::CmdLineArgs::Root::Root(ebbrt::EbbId id) : myId_(id), theRep_(NULL)  {
+  data_ = ebbrt::global_id_map->Get(id).Share();
 }
 
 UNIX::CmdLineArgs *
@@ -113,7 +113,7 @@ UNIX::CmdLineArgs::HandleFault(ebbrt::EbbId id) {
   if (ebbrt::local_id_map->Insert(wr_access, id)) {
     // WRITE_LOCK HELD:  THIS HOLDS READERS FROM MAKING PROGESS
     //                   ONLY ONE WRITER EXITS
-    Root *root = new Root();
+    Root *root = new Root(id);
     wr_access->second = root;
     wr_access.release(); // WE CAN NOW DROP THE LOCK and retry as a normal reader
   }
