@@ -63,7 +63,7 @@ namespace UNIX {
     Root *myRoot_;
     char **environ_;
     // Private Constrtor called by HandleFault
-      Environment(Root *root);
+    Environment(Root *root);
   public:
     static Environment & HandleFault(ebbrt::EbbId id);
     static ebbrt::Future<ebbrt::EbbRef<Environment>> Init();
@@ -75,42 +75,73 @@ namespace UNIX {
 
   };
 
-#ifndef __EBBRT_BM__
-  class InputStream;
-  extern InputStream *stdin;
-
   class InputStream {
   public:
+
+    struct RootMembers {
+      int fd;
+      size_t len;
+      enum FileTypes { UNKNOWN, BLOCK_DEV, CHAR_DEV, SOCKET, PIPE, FILE, DIR, SYMLINK } type;
+      static std::string toString(RootMembers * rm) {
+	return std::move(std::string((char *)rm,sizeof(*rm)));
+      }
+    };
+    // Kludge : not stable accross platforms
+    class Root {
+    private:
+      std::mutex lock_;                        
+      InputStream *theRep_;
+      ebbrt::SharedFuture<std::string> data_;
+      RootMembers *members_;
+    public:
+      Root();
+      InputStream * getRep_BIN();
+      ebbrt::SharedFuture<std::string> getString() { return data_; }
+      int fd() { return members_->fd; }
+      size_t len() { return members_->len; }
+      RootMembers::FileTypes type() { return members_->type; }
+    }; 
     static const size_t kBufferSize = 1024;
   private:
-    int fd_;
-    size_t len_;
+    Root *myRoot_;
+#ifndef __EBBRT_BM__
     boost::asio::posix::stream_descriptor::bytes_readable asioAvail_;
     boost::asio::posix::stream_descriptor *sd_;
+#endif
+
+    int fd_;
+    size_t len_;
+
     bool doRead_;
     char buffer_[kBufferSize];
     std::size_t count_;
     ebbrt::MovableFunction<void(std::unique_ptr<ebbrt::IOBuf>,size_t avail)> consumer_;
-    
-  void async_read_some();
+
+    InputStream(Root *root);
+
+    void async_read_some();
   public:
+    static InputStream & HandleFault(ebbrt::EbbId id);
+    static ebbrt::Future<ebbrt::EbbRef<InputStream>> Init();
+    void destroy();
+
+#ifdef __EBBRT_BM__    
+    void  async_read_stop() {}
     
-    InputStream(int fd);
-    
+    void async_read_start(ebbrt::MovableFunction<void(std::unique_ptr<ebbrt::IOBuf>,
+						      size_t avail)> consumer) {}
+#else    
     void  async_read_stop() { 
       if (doRead_==false) return;
       printf("\nStopping Streaming Read\n"); 
       doRead_=false; 
     }
     
-    void async_read_start(ebbrt::MovableFunction<void(std::unique_ptr<ebbrt::IOBuf>,size_t avail)> consumer);
+    void async_read_start(ebbrt::MovableFunction<void(std::unique_ptr<ebbrt::IOBuf>,
+						      size_t avail)> consumer);
     
-    static void Init() {
-      int fd = ::dup(STDIN_FILENO);
-      UNIX::stdin = new InputStream(fd);
-    }
-  };
 #endif
+  };
 
   extern ebbrt::Messenger::NetworkId fe;
   
@@ -122,11 +153,15 @@ namespace UNIX {
   __attribute__ ((unused)) static void Init(int argc, const char **argv) {
     CmdLineArgs::Init(argc, argv).Block();
     Environment::Init().Block();
+    InputStream::Init().Block();
   }
 #endif
 
-    constexpr auto cmd_line_args = ebbrt::EbbRef<CmdLineArgs>(kCmdLineArgsId);
-    constexpr auto environment =  ebbrt::EbbRef<Environment>(kEnvironmentId);
+  
+  constexpr auto cmd_line_args = ebbrt::EbbRef<CmdLineArgs>(kCmdLineArgsId);
+  constexpr auto environment =  ebbrt::EbbRef<Environment>(kEnvironmentId);
+  constexpr auto sin = ebbrt::EbbRef<InputStream>(kSInId);
 };
 
 #endif
+
