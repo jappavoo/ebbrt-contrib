@@ -8,6 +8,10 @@
 
 #include "Unix.h"
 
+#include <boost/crc.hpp>
+ 
+
+
 #ifndef __EBBRT_BM__
 ebbrt::Future<ebbrt::EbbRef<UNIX::Environment>>
 UNIX::Environment::Init()
@@ -18,6 +22,16 @@ UNIX::Environment::Init()
     str.append(::environ[i]);
     str.push_back(0);
   }  
+
+  {
+    const char *data = str.data();
+    int len = str.size();
+    boost::crc_32_type  crc;
+    crc.process_bytes( data, len );
+    printf("%s: data=%p len=%d crc=0x%x\n", __PRETTY_FUNCTION__, 
+	   data, len, crc.checksum());
+  }
+
   return ebbrt::global_id_map->Set(kEnvironmentId, std::move(str))
       .Then([](ebbrt::Future<void> f) {
         f.Get();
@@ -27,7 +41,19 @@ UNIX::Environment::Init()
 #endif
 
 #ifndef __EBBRT_BM__ 
-UNIX::Environment::Environment(Root *root) : myRoot_(root), environ_(NULL) {}
+UNIX::Environment::Environment(Root *root) : myRoot_(root), environ_(NULL) {
+  auto fstr = myRoot_->getString();
+  assert(fstr.Ready());
+  std::string str = fstr.Get();
+  const char *data = str.data();
+  int len = str.size();
+  {
+    boost::crc_32_type  crc;
+    crc.process_bytes( data, len );
+    printf("%s: data=%p len=%d crc=0x%x\n", __PRETTY_FUNCTION__, 
+	   data, len, crc.checksum());
+  }
+}
 #else
 UNIX::Environment::Environment(Root *root) : myRoot_(root), environ_(NULL)
 {
@@ -38,6 +64,13 @@ UNIX::Environment::Environment(Root *root) : myRoot_(root), environ_(NULL)
   const char *data = str.data();
   int len = str.size();
   int i,j,numvar;
+
+  {
+    boost::crc_32_type  crc;
+    crc.process_bytes( data, len );
+    ebbrt::kprintf("%s: data=%p len=%d crc=0x%x\n", __PRETTY_FUNCTION__, 
+		   data, len, crc.checksum());
+  }
 
   numvar = 0;
   for (i=0; i<len; i++) if (data[i] == 0) numvar++;

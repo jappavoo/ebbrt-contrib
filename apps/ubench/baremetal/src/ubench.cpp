@@ -211,20 +211,19 @@ void AppMain()
 		   UNIX::cmd_line_args->argv(i));
   }
 
+#if 0
+  //  asm volatile ("jmp .");
+
   for (int i=0; UNIX::environment->environ()[i]!=NULL; i++) {
     ebbrt::kprintf("%d: ev=%s\n", i, UNIX::environment->environ()[i]);
   }
   ebbrt::kprintf("getenv(\"hello\")=%s\n", UNIX::environment->getenv("hello"));
-
+#endif
 
   UNIX::sin->async_read_start([](std::unique_ptr<ebbrt::IOBuf> buf,size_t avail) {
-#if 1
-      ebbrt::kprintf("Async Read on STDIN: data=%p len=%ld avail=%ld\n", 
-		     buf->Data(),
-		     buf->Length(), avail);
-#else
-      ebbrt::console::Write((const char *)buf->Data(), buf->Length());
-#endif
+	do {
+	  ebbrt::console::Write((const char *)buf->Data(), buf->Length());
+	} while(buf->Pop()!=nullptr);
     });
 
 

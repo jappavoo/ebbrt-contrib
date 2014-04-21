@@ -106,11 +106,13 @@ namespace UNIX {
 	MessageType type;
       };
       struct StreamStartMsg : Message {
-      } stream_start_msg;
+      } stream_start_msg_;
       struct StreamDataMsg : Message {
-      } stream_data_msg;
+	size_t avail;
+      } stream_data_msg_;
       struct StreamStopMsg : Message {
-      } stream_stop_msg;
+      } stream_stop_msg_;
+      friend InputStream;
     public:
       Root(ebbrt::EbbId id);
       InputStream * getRep_BIN();
@@ -119,11 +121,13 @@ namespace UNIX {
       size_t len() { return members_->len; }
       RootMembers::FileTypes type() { return members_->type; }
       ebbrt::EbbId myId() { return myId_; }
-      void fe_start_stream() {
-      }
+      void start_stream();
+      void process_message(ebbrt::Messenger::NetworkId, 
+			   std::unique_ptr<ebbrt::IOBuf>&&);
     }; 
     static const size_t kBufferSize = 1024;
   private:
+    friend Root;
     Root *myRoot_;
 #ifndef __EBBRT_BM__
     boost::asio::posix::stream_descriptor::bytes_readable asioAvail_;
@@ -136,7 +140,8 @@ namespace UNIX {
     bool doRead_;
     char buffer_[kBufferSize];
     std::size_t count_;
-    ebbrt::MovableFunction<void(std::unique_ptr<ebbrt::IOBuf>,size_t avail)> consumer_;
+    ebbrt::MovableFunction<void(std::unique_ptr<ebbrt::IOBuf>&&,
+				size_t avail)> consumer_;
 
     InputStream(Root *root);
 
@@ -146,7 +151,7 @@ namespace UNIX {
     static ebbrt::Future<ebbrt::EbbRef<InputStream>> InitSIn();
     void destroy();
 
-    void async_read_start(ebbrt::MovableFunction<void(std::unique_ptr<ebbrt::IOBuf>,
+    void async_read_start(ebbrt::MovableFunction<void(std::unique_ptr<ebbrt::IOBuf>&&,
 						      size_t avail)> consumer);
 
     void  async_read_stop() { 

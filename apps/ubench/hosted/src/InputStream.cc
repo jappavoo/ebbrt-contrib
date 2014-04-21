@@ -17,11 +17,12 @@
 #include "../../src/Unix.h"
 
 typedef ebbrt::EventManager ebbrtEM;
-typedef ebbrt::MovableFunction<void(std::unique_ptr<ebbrt::IOBuf>,size_t avail)> ebbrtHandler;
+typedef ebbrt::MovableFunction<void(std::unique_ptr<ebbrt::IOBuf>&&,
+				    size_t avail)> ebbrtHandler;
 typedef boost::asio::posix::stream_descriptor asioSD;
 typedef boost::system::error_code boostEC;
 typedef ebbrt::IOBuf IOBuf;
-
+typedef ebbrt::Messenger::NetworkId NetId;
 
 // also could use null_buffers() with async_read_some(null_buffers(), handler);
 namespace UNIX {
