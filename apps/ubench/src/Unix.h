@@ -122,6 +122,7 @@ namespace UNIX {
       RootMembers::FileTypes type() { return members_->type; }
       ebbrt::EbbId myId() { return myId_; }
       void start_stream();
+      void stop_stream();
       void process_message(ebbrt::Messenger::NetworkId, 
 			   std::unique_ptr<ebbrt::IOBuf>&&);
     }; 
@@ -158,6 +159,7 @@ namespace UNIX {
       if (doRead_==false) return;
       printf("\nStopping Streaming Read\n"); 
       doRead_=false; 
+      myRoot_->stop_stream();
     }
   };
 

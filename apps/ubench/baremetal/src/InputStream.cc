@@ -24,47 +24,7 @@ typedef ebbrt::IOBuf IOBuf;
 // also could use null_buffers() with async_read_some(null_buffers(), handler);
 namespace UNIX {
 
-#ifndef __EBBRT_BM__
-  void InputStream::async_read_some()   {
-    if (sd_ == NULL || doRead_==false) return;
-    sd_->async_read_some(
-			 boost::asio::buffer(buffer_,kBufferSize),  
-			 ebbrtEM::WrapHandler([this]
-					      (
-					       const boostEC& ec,
-					       std::size_t size
-					       ) 
-					      {
-						size_t avail;
-						if (ec) {printf("ERROR: on Stream"); return;}
-						{
-						  boostEC cec;
-						  sd_->io_control(asioAvail_,cec);
-						  if (cec) {printf("ERROR: on readable"); return;}
-						  avail = asioAvail_.get();
-						}
-						std::unique_ptr<IOBuf> iobuf = 
-						  std::unique_ptr<IOBuf>(new IOBuf((void*)buffer_, 
-										   size, 
-										   [](void*){}));
-						consumer_(std::move(iobuf),avail);
-						count_ += size;
-						if (doRead_==true) async_read_some(); 
-					      }
-					      )
-			 );
-  }
-#else
-  void InputStream::async_read_some()   {
-    if (doRead_==false) return;
-    std::unique_ptr<IOBuf> iobuf = 
-      std::unique_ptr<IOBuf>(new IOBuf((void*)buffer_, 
-				       0, 
-				       [](void*){}));
-    consumer_(std::move(iobuf),0);
-    
-  }  
-#endif
+  void InputStream::async_read_some() {}  
 
   InputStream::InputStream(Root *root) : 
  				      ebbrt::Messagable<InputStream>(root->myId()),
@@ -98,6 +58,8 @@ namespace UNIX {
 	   fd_, len_, myRoot_->type(), myRoot_->myId());
     myRoot_->start_stream();
   }
+
+  
 
 };
 

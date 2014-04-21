@@ -37,6 +37,18 @@ namespace UNIX {
     }
   }
 
+  void InputStream::Root::stop_stream()
+  {
+    if (UNIX::fe == ebbrt::messenger->LocalNetworkId()) return;
+    else {
+      std::unique_ptr<IOBuf> msg_buf =  
+	std::unique_ptr<IOBuf>(new IOBuf((void*)&stream_stop_msg_, 
+					 sizeof(stream_stop_msg_),
+					 [](void*){}));
+      theRep_->SendMessage(UNIX::fe, std::move(msg_buf));
+    }
+  }
+
   void InputStream::Root::process_message(NetId nid, 
 					  std::unique_ptr<ebbrt::IOBuf>&& buf) {
     Root::Message *msg = (Root::Message *)buf->Data();
