@@ -24,6 +24,7 @@ namespace UNIX {
       ebbrt::SharedFuture<std::string> data_;
     public:
       Root(ebbrt::EbbId id);
+      ebbrt::EbbId myId() { return myId_; }
       CmdLineArgs * getRep_BIN();
       ebbrt::SharedFuture<std::string> getString() { return data_; }
     }; 
@@ -52,10 +53,12 @@ namespace UNIX {
     class Root {
     private:
       std::mutex lock_;
+      ebbrt::EbbId myId_;
       Environment *theRep_;
       ebbrt::SharedFuture<std::string> data_;
     public:
-      Root();
+      Root(ebbrt::EbbId id);
+      ebbrt::EbbId myId() { return myId_; }
       Environment * getRep_BIN();
       ebbrt::SharedFuture<std::string> getString() { return data_; }
     }; 

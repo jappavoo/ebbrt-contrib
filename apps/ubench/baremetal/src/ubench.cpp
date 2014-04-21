@@ -1,4 +1,5 @@
 #include <ebbrt/Debug.h>
+#include <ebbrt/Console.h>
 #include <stdint.h>
 #include <inttypes.h>
 #include <assert.h>
@@ -216,11 +217,16 @@ void AppMain()
   ebbrt::kprintf("getenv(\"hello\")=%s\n", UNIX::environment->getenv("hello"));
 
 
-#if 0
   UNIX::sin->async_read_start([](std::unique_ptr<ebbrt::IOBuf> buf,size_t avail) {
-      ebbrt::kprintf("Async Read on STDIN\n");
-    });
+#if 1
+      ebbrt::kprintf("Async Read on STDIN: data=%p len=%ld avail=%ld\n", 
+		     buf->Data(),
+		     buf->Length(), avail);
+#else
+      ebbrt::console::Write((const char *)buf->Data(), buf->Length());
 #endif
+    });
+
 
   {
     int argc;

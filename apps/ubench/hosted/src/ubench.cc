@@ -41,7 +41,7 @@ main(int argc, char **argv)
     }
     printf("getenv(\"hello\")=%s\n", UNIX::environment->getenv("hello"));
 
-#if 1
+#if 0
     UNIX::sin->async_read_start([](std::unique_ptr<ebbrt::IOBuf> buf,size_t avail) {
 	  size_t n = write(STDOUT_FILENO, buf->Data(), buf->Length()); 
 	  if (n<=0) throw std::runtime_error("write to stdout failed");
