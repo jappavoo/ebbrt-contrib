@@ -39,10 +39,10 @@ namespace UNIX {
     case RootMembers::kCHAR_DEV:
     case RootMembers::kSOCKET:
     case RootMembers::kPIPE: 
-      ebbrt::kprintf("fd is a real stream");
+      //  ebbrt::kprintf("fd is a real stream");
       break;
     case RootMembers::kFILE:
-      ebbrt::kprintf("fd is a real file");
+      // ebbrt::kprintf("fd is a real file");
       break;
     default:
       throw std::runtime_error("UNSUPPORTED FILE TYPE");
@@ -55,7 +55,7 @@ namespace UNIX {
     doRead_=true;
     consumer_ = std::move(consumer);
     ebbrt::kprintf("\nStarting Stream Read: fd:%d len:%ld type=%d myId=0x%x\n", 
-	   fd_, len_, myRoot_->type(), myRoot_->myId());
+		   fd_, len_, myRoot_->type(), myRoot_->myId());
     myRoot_->start_stream();
   }
 

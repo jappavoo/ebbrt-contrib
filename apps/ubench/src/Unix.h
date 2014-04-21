@@ -157,10 +157,17 @@ namespace UNIX {
 
     void  async_read_stop() { 
       if (doRead_==false) return;
+#ifdef __EBBRT_BM__
+      ebbrt::kprintf("\nStopping Streaming Read\n"); 
+#else
       printf("\nStopping Streaming Read\n"); 
+      sd_->cancel();
+#endif
       doRead_=false; 
       myRoot_->stop_stream();
     }
+
+    bool isFile() { return ( myRoot_->type() == RootMembers::kFILE); }
   };
 
   extern ebbrt::Messenger::NetworkId fe;

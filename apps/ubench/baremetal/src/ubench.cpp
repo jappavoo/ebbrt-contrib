@@ -200,18 +200,25 @@ int process_img_args(int argc, char **argv)
 }
 
 
+#define _UBENCH_CMD_LINE_ARGS_TEST_
+//#define _UBENCH_ENVIRONMENT_TEST_
+#define _UBENCH_STANDARD_IN_TEST_
+//#define _UBENCH_BOOT_IMG_CMD_LINE_TEST_
+//#define   _UBENCH_BENCHMARKS_
 
 void AppMain()
 {
 
   UNIX::Init();
 
+#ifdef _UBENCH_CMD_LINE_ARGS_TEST_
   for (int i=0; i<UNIX::cmd_line_args->argc(); i++) {
     ebbrt::kprintf("UNIX::cmd_line_args->argv(%d)=%s\n",i,
 		   UNIX::cmd_line_args->argv(i));
   }
+#endif
 
-#if 0
+#ifdef _UBENCH_ENVIRONMENT_TEST_
   //  asm volatile ("jmp .");
 
   for (int i=0; UNIX::environment->environ()[i]!=NULL; i++) {
@@ -220,13 +227,18 @@ void AppMain()
   ebbrt::kprintf("getenv(\"hello\")=%s\n", UNIX::environment->getenv("hello"));
 #endif
 
+#ifdef _UBENCH_STANDARD_IN_TEST_
   UNIX::sin->async_read_start([](std::unique_ptr<ebbrt::IOBuf> buf,size_t avail) {
 	do {
 	  ebbrt::console::Write((const char *)buf->Data(), buf->Length());
+	  if (!UNIX::sin->isFile() && (buf->Data()[0] == '.')) {
+	    UNIX::sin->async_read_stop();
+	  }
 	} while(buf->Pop()!=nullptr);
     });
+#endif
 
-
+#ifdef _UBENCH_BOOT_IMG_CMD_LINE_TEST_
   {
     int argc;
     char **argv;
@@ -242,7 +254,9 @@ void AppMain()
       if (process_img_args(argc, argv) == -1) return;
     }
   }
-  
+#endif
+
+#ifdef _UBENCH_BENCHMARKS_
   // Base line C++ method dispatch numbers 
   for (int i=0; i<REPEAT_CNT; i++) {
     GlobalCounterTest();
@@ -259,8 +273,9 @@ void AppMain()
 
 
   // Multicore Numbers
+  ebbrt::kprintf("ubench benchmarks done: END\n");
+#endif
 
-  ebbrt::kprintf("ubench: END\n");
   return;
 }
 

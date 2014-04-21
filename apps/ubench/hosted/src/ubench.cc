@@ -14,6 +14,8 @@
 
 #include "../../src/Unix.h"
 
+//#define __FRONT_END_TEST__
+
 int 
 main(int argc, char **argv)
 {
@@ -41,10 +43,15 @@ main(int argc, char **argv)
     }
     printf("getenv(\"hello\")=%s\n", UNIX::environment->getenv("hello"));
 
-#if 0
-    UNIX::sin->async_read_start([](std::unique_ptr<ebbrt::IOBuf> buf,size_t avail) {
+#ifdef __FRONT_END_TEST__
+  UNIX::sin->async_read_start([](std::unique_ptr<ebbrt::IOBuf> buf,size_t avail) {
+	do {
 	  size_t n = write(STDOUT_FILENO, buf->Data(), buf->Length()); 
 	  if (n<=0) throw std::runtime_error("write to stdout failed");
+	  if (!UNIX::sin->isFile() && (buf->Data()[0] == '.')) {
+	    UNIX::sin->async_read_stop();
+	  }
+	} while(buf->Pop()!=nullptr);
     });
 #else
     ebbrt::node_allocator->AllocateNode(bindir.string());

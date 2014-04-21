@@ -78,17 +78,17 @@ namespace UNIX {
     case kSTREAM_DATA:
       {
 	StreamDataMsg *m = (StreamDataMsg *)msg;
-	printf("%s: kSTREAM_DATA: Received: %d: avail=%ld \n",
-	       __PRETTY_FUNCTION__, m->type, m->avail);
+	//	printf("%s: kSTREAM_DATA: Received: %d: avail=%ld \n",
+	//       __PRETTY_FUNCTION__, m->type, m->avail);
 	buf->Advance(sizeof(StreamDataMsg));
 	theRep_->consumer_(std::move(buf), m->avail); // FIXME: DON'T LIKE THIS
       }
       break;
     case kSTREAM_STOP:
       {
-	StreamStopMsg *m = (StreamStopMsg *)msg;
-	printf("%s: kSTREAM_STOP: Received: %d\n", 
-	       __PRETTY_FUNCTION__, m->type);
+	// StreamStopMsg *m = (StreamStopMsg *)msg;
+	// printf("%s: kSTREAM_STOP: Received: %d\n", 
+	//         __PRETTY_FUNCTION__, m->type);
 	theRep_->async_read_stop();
       }
       break;
