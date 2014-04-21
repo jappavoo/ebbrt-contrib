@@ -10,6 +10,7 @@
 #include <ebbrt/Runtime.h>
 #include <ebbrt/Future.h>
 #include <ebbrt/Buffer.h>
+#include <ebbrt/Message.h>
 
 #include "StaticEbbIds.h"
 
@@ -79,13 +80,15 @@ namespace UNIX {
 
   };
 
-  class InputStream {
+  class InputStream : public ebbrt::Messagable<InputStream> {
   public:
-
+    void ReceiveMessage(ebbrt::Messenger::NetworkId nid, 
+			std::unique_ptr<ebbrt::IOBuf>&& buf);
     struct RootMembers {
       int fd;
       size_t len;
-      enum FileTypes { UNKNOWN, BLOCK_DEV, CHAR_DEV, SOCKET, PIPE, FILE, DIR, SYMLINK } type;
+      enum FileTypes { kUNKNOWN, kBLOCK_DEV, kCHAR_DEV, kSOCKET, kPIPE, 
+		       kFILE, kDIR, kSYMLINK } type;
       static std::string toString(RootMembers * rm) {
 	return std::move(std::string((char *)rm,sizeof(*rm)));
       }
@@ -98,6 +101,16 @@ namespace UNIX {
       InputStream *theRep_;
       ebbrt::SharedFuture<std::string> data_;
       RootMembers *members_;
+      enum MessageType { kSTREAM_START, kSTREAM_DATA, kSTREAM_STOP};
+      struct Message {
+	MessageType type;
+      };
+      struct StreamStartMsg : Message {
+      } stream_start_msg;
+      struct StreamDataMsg : Message {
+      } stream_data_msg;
+      struct StreamStopMsg : Message {
+      } stream_stop_msg;
     public:
       Root(ebbrt::EbbId id);
       InputStream * getRep_BIN();
@@ -106,6 +119,8 @@ namespace UNIX {
       size_t len() { return members_->len; }
       RootMembers::FileTypes type() { return members_->type; }
       ebbrt::EbbId myId() { return myId_; }
+      void fe_start_stream() {
+      }
     }; 
     static const size_t kBufferSize = 1024;
   private:
