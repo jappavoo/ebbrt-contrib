@@ -90,36 +90,59 @@ namespace UNIX {
   }
 
 
+
   void InputStream::async_read_some()   {
-    if (sd_ == NULL || doRead_==false) return;
-    sd_->async_read_some(
-			 boost::asio::buffer(buffer_,kBufferSize),  
-			 ebbrtEM::WrapHandler([this]
-					      (
-					       const boostEC& ec,
-					       std::size_t size
-					       ) 
-					      {
-						size_t avail;
-						if (ec) {printf("ERROR: on Stream"); return;}
+    if (doRead_==false) return;
+    if (sd_) {
+      sd_->async_read_some(
+			   boost::asio::buffer(buffer_,kBufferSize),  
+			   ebbrtEM::WrapHandler([this]
+						(
+						 const boostEC& ec,
+						 std::size_t size
+						 ) 
 						{
-						  boostEC cec;
+						  size_t avail;
+						  if (ec) {printf("ERROR: on Stream"); return;}
+						  {
+						    boostEC cec;
 						  sd_->io_control(asioAvail_,cec);
 						  if (cec) {printf("ERROR: on readable"); return;}
 						  avail = asioAvail_.get();
+						  }
+						  std::unique_ptr<IOBuf> iobuf = 
+						    std::unique_ptr<IOBuf>(new IOBuf((void*)buffer_, 
+										     size, 
+										     [this,size](void*p){
+										       // printf("FREE %p\n",p);
+										       count_ += size;
+										     if (doRead_==true) async_read_some(); 
+										     }));
+						  consumer_(std::move(iobuf),avail);
 						}
-						std::unique_ptr<IOBuf> iobuf = 
-						  std::unique_ptr<IOBuf>(new IOBuf((void*)buffer_, 
-										   size, 
-										   [](void*){}));
-						consumer_(std::move(iobuf),avail);
-						count_ += size;
-						if (doRead_==true) async_read_some(); 
-					      }
-					      )
+						)
 			 );
+    } else {
+      size_t n;
+      if (count_ < len_) {
+	n = read(fd_, buffer_, kBufferSize);
+	if (n<0) throw std::runtime_error("read of regular file failed");
+	std::unique_ptr<IOBuf> iobuf = 
+	  std::unique_ptr<IOBuf>(new IOBuf((void*)buffer_, n, 
+					   [this,n](void*p){
+					     // printf("free %p\n",p);
+					     count_ += n;
+					     if (count_ == len_) {
+					       printf("close stream here");
+					     } else {
+					       if (doRead_==true) async_read_some(); 
+					     }
+					   }));
+	consumer_(std::move(iobuf),len_-(count_+n));
+	
+      }
+    }
   }
-  
   
   InputStream::InputStream(Root *root) : 
  				      ebbrt::Messagable<InputStream>(root->myId()),
@@ -151,21 +174,9 @@ namespace UNIX {
     doRead_=true;
     consumer_ = std::move(consumer);
     printf("\nStarting Stream Read\n");
-    if (sd_ == NULL) {
-      size_t n;
-      while (count_ < len_) {
-	n = read(fd_, buffer_, kBufferSize);
-	if (n<0) throw std::runtime_error("read of regular file failed");
-	std::unique_ptr<IOBuf> iobuf = 
-	  std::unique_ptr<IOBuf>(new IOBuf((void*)buffer_, n, [](void*){}));
-	consumer_(std::move(iobuf),len_-(count_+n));
-	count_ += n;
-      }
-    } else {
-      async_read_some(); 
-    }
+    async_read_some(); 
   }
-
+  
 };
 
 
