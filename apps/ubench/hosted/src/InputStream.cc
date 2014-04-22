@@ -10,6 +10,7 @@
 #include <ebbrt/StaticIds.h>
 #include <ebbrt/Runtime.h>
 #include <ebbrt/Debug.h>
+#include <ebbrt/EbbAllocator.h>
 #include <stdio.h>
 
 
@@ -27,16 +28,16 @@ typedef ebbrt::Messenger::NetworkId NetId;
 // also could use null_buffers() with async_read_some(null_buffers(), handler);
 namespace UNIX {
 
-  ebbrt::Future<ebbrt::EbbRef<InputStream>> InputStream::InitSIn()
+  ebbrt::Future<ebbrt::EbbRef<InputStream>> InputStream::Create(ebbrt::EbbId id, int fd)
   {
     RootMembers members;
-    members.fd = ::dup(STDIN_FILENO);
+    members.fd = fd;
     members.len=0;
     members.type=RootMembers::kUNKNOWN;
 
     struct stat sb;
     if (fstat(members.fd, &sb) == -1) throw std::runtime_error("stat");
-    printf("Standard Input: File type: ");
+    printf("id: %d, fd: %d -  File type: ", id, fd);
 
     switch (sb.st_mode & S_IFMT) {
     case S_IFBLK: { 
@@ -82,11 +83,23 @@ namespace UNIX {
     }
 
     std::string str = std::move(RootMembers::toString(&members));
-    return ebbrt::global_id_map->Set(kSInId, std::move(str))
-         .Then([](ebbrt::Future<void> f) {
+    return ebbrt::global_id_map->Set(id, std::move(str))
+         .Then([id](ebbrt::Future<void> f) {
                  f.Get();
-                 return ebbrt::EbbRef<InputStream>(kSInId);
+                 return ebbrt::EbbRef<InputStream>(id);
               });
+  }
+
+  ebbrt::Future<ebbrt::EbbRef<InputStream>> InputStream::Create(int fd)
+  {
+    auto id = ebbrt::ebb_allocator->Allocate();
+    return Create(id, fd);
+  }
+
+  ebbrt::Future<ebbrt::EbbRef<InputStream>> InputStream::InitSIn()
+  {
+    int fd = ::dup(STDIN_FILENO);
+    return Create(kSInId, fd);
   }
 
 

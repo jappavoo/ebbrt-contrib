@@ -50,8 +50,21 @@ main(int argc, char **argv)
 	  if (n<=0) throw std::runtime_error("write to stdout failed");
 	  if (!UNIX::sin->isFile() && (buf->Data()[0] == '.')) {
 	    UNIX::sin->async_read_stop();
+	    break;
 	  }
 	} while(buf->Pop()!=nullptr);
+    });
+
+  auto fistream = UNIX::root_fs->openInputStream("/etc/passwd");
+  fistream.Then([](ebbrt::Future<ebbrt::EbbRef<UNIX::InputStream>> fis) {
+	       
+      ebbrt::EbbRef<UNIX::InputStream> is = fis.Get();		  
+      is->async_read_start([](std::unique_ptr<ebbrt::IOBuf> buf,size_t avail) {
+		      do {
+	    size_t n = write(STDOUT_FILENO, buf->Data(), buf->Length()); 
+	    if (n<=0) throw std::runtime_error("write to stdout failed");
+	  } while(buf->Pop()!=nullptr);
+	});
     });
 #else
     ebbrt::node_allocator->AllocateNode(bindir.string());

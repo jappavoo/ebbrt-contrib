@@ -147,8 +147,11 @@ namespace UNIX {
     InputStream(Root *root);
 
     void async_read_some();
+    static ebbrt::Future<ebbrt::EbbRef<InputStream>> Create(ebbrt::EbbId id, int fd);
+
   public:
     static InputStream & HandleFault(ebbrt::EbbId id);
+    static ebbrt::Future<ebbrt::EbbRef<InputStream>> Create(int fd);
     static ebbrt::Future<ebbrt::EbbRef<InputStream>> InitSIn();
     void destroy();
 
@@ -170,6 +173,50 @@ namespace UNIX {
     bool isFile() { return ( myRoot_->type() == RootMembers::kFILE); }
   };
 
+  class FS : public ebbrt::Messagable<FS> {      
+  public:
+    void ReceiveMessage(ebbrt::Messenger::NetworkId nid, 
+			std::unique_ptr<ebbrt::IOBuf>&& buf);
+
+    class Root {
+    private:
+      std::mutex lock_;
+      ebbrt::EbbId myId_;
+      FS *theRep_;
+      ebbrt::SharedFuture<std::string> data_;
+      ebbrt::Promise<ebbrt::EbbRef<InputStream>> *p_;
+      enum MessageType { kOPEN_STREAM, kSTREAM_ID};
+      struct Message {
+	MessageType type;
+      };
+      struct OpenStreamMsg : Message {
+      } open_stream_msg_;
+      struct StreamIdMsg : Message {
+	ebbrt::EbbId id;
+      } stream_id_msg_;
+      friend FS;
+    public:
+      Root(ebbrt::EbbId id);
+      ebbrt::EbbId myId() { return myId_; }
+      FS * getRep_BIN();
+      ebbrt::SharedFuture<std::string> getString() { return data_; }
+      ebbrt::Future<ebbrt::EbbRef<InputStream>> open_stream(std::string);
+      void process_message(ebbrt::Messenger::NetworkId, 
+			   std::unique_ptr<ebbrt::IOBuf>&&);
+    }; 
+  private:
+    // Representative Members
+    Root *myRoot_;
+    // Private Constrtor called by HandleFault
+    FS(Root *root);
+  public:
+    static FS & HandleFault(ebbrt::EbbId id);
+    static ebbrt::Future<ebbrt::EbbRef<FS>> Init(std::string &&path);
+    void destroy();
+    ebbrt::Future<ebbrt::EbbRef<InputStream>>  openInputStream(std::string path);
+  };
+
+
   extern ebbrt::Messenger::NetworkId fe;
   
 #ifdef __EBBRT_BM__
@@ -181,13 +228,14 @@ namespace UNIX {
     CmdLineArgs::Init(argc, argv).Block();
     Environment::Init().Block();
     InputStream::InitSIn().Block();
+    FS::Init("/").Block();
   }
 #endif
 
-  
   constexpr auto cmd_line_args = ebbrt::EbbRef<CmdLineArgs>(kCmdLineArgsId);
   constexpr auto environment =  ebbrt::EbbRef<Environment>(kEnvironmentId);
   constexpr auto sin = ebbrt::EbbRef<InputStream>(kSInId);
+  constexpr auto root_fs = ebbrt::EbbRef<FS>(kRootFSId);
 };
 
 #endif

@@ -202,7 +202,8 @@ int process_img_args(int argc, char **argv)
 
 #define _UBENCH_CMD_LINE_ARGS_TEST_
 //#define _UBENCH_ENVIRONMENT_TEST_
-#define _UBENCH_STANDARD_IN_TEST_
+//#define _UBENCH_STANDARD_IN_TEST_
+#define _UBENCH_FILE_IN_TEST_
 //#define _UBENCH_BOOT_IMG_CMD_LINE_TEST_
 //#define   _UBENCH_BENCHMARKS_
 
@@ -233,9 +234,26 @@ void AppMain()
 	  ebbrt::console::Write((const char *)buf->Data(), buf->Length());
 	  if (!UNIX::sin->isFile() && (buf->Data()[0] == '.')) {
 	    UNIX::sin->async_read_stop();
+	    break;
 	  }
 	} while(buf->Pop()!=nullptr);
     });
+#endif
+
+
+#ifdef _UBENCH_FILE_IN_TEST_
+  //asm volatile ("jmp .");
+ebbrt::kprintf("0:%s\n", __PRETTY_FUNCTION__);
+  auto fistream = UNIX::root_fs->openInputStream("/etc/passwd");
+ebbrt::kprintf("1:%s\n", __PRETTY_FUNCTION__);
+  fistream.Then([](ebbrt::Future<ebbrt::EbbRef<UNIX::InputStream>> fis) {
+    ebbrt::EbbRef<UNIX::InputStream> is = fis.Get();		  
+    is->async_read_start([](std::unique_ptr<ebbrt::IOBuf> buf,size_t avail) {
+           do {
+              ebbrt::console::Write((const char *)buf->Data(), buf->Length());  
+	   } while(buf->Pop()!=nullptr);
+    });
+  });
 #endif
 
 #ifdef _UBENCH_BOOT_IMG_CMD_LINE_TEST_
