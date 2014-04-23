@@ -70,7 +70,8 @@ namespace UNIX {
 				    //printf("type:%d avail:%ld\n", 
 				    //  stream_data_msg_.type,
 				    //  stream_data_msg_.avail);
-				    msg_buf->AppendChain(std::move(buf));
+				    if (buf->Data()!=NULL) msg_buf->AppendChain(std::move(buf));
+				    else   printf("\nPASSING EOF\n");
 				    theRep_->SendMessage(nid, std::move(msg_buf));
 				  });
       }
@@ -81,7 +82,12 @@ namespace UNIX {
 	//	printf("%s: kSTREAM_DATA: Received: %d: avail=%ld \n",
 	//       __PRETTY_FUNCTION__, m->type, m->avail);
 	buf->Advance(sizeof(StreamDataMsg));
-	theRep_->consumer_(std::move(buf), m->avail); // FIXME: DON'T LIKE THIS
+	printf("\nbuf->Length()=%ld\n", buf->Length());
+	if (buf->Length() == 0) {
+	  theRep_->consumer_(IOBuf::WrapBuffer(NULL,0),0);
+	} else {
+	  theRep_->consumer_(std::move(buf), m->avail);
+	}
       }
       break;
     case kSTREAM_STOP:

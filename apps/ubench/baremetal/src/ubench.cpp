@@ -232,6 +232,7 @@ ebbrt::kprintf("_UBENCH_ENVIRONMENT_TEST_: End\n");
 #ifdef _UBENCH_STANDARD_IN_TEST_
   ebbrt::kprintf("_UBENCH_STANDARD_IN_TEST_: Start\n");
   UNIX::sin->async_read_start([](std::unique_ptr<ebbrt::IOBuf> buf,size_t avail) {
+        if (buf->Data() == NULL) { printf("Stream EOF\n"); return; }
 	do {
 	  ebbrt::console::Write((const char *)buf->Data(), buf->Length());
 	  if (!UNIX::sin->isFile() && (buf->Data()[0] == '.')) {
@@ -253,6 +254,7 @@ ebbrt::kprintf("1:%s\n", __PRETTY_FUNCTION__);
   fistream.Then([](ebbrt::Future<ebbrt::EbbRef<UNIX::InputStream>> fis) {
     ebbrt::EbbRef<UNIX::InputStream> is = fis.Get();		  
     is->async_read_start([](std::unique_ptr<ebbrt::IOBuf> buf,size_t avail) {
+           if (buf->Data() == NULL) { ebbrt::kprintf("Stream EOF\n"); return; }
            do {
               ebbrt::console::Write((const char *)buf->Data(), buf->Length());  
 	   } while(buf->Pop()!=nullptr);

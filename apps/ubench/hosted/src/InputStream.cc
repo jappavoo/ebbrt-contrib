@@ -149,6 +149,9 @@ namespace UNIX {
 					       printf("\n %s:%d * CLOSE STREAM LOGIC HERE *\n",
 						      __PRETTY_FUNCTION__, __LINE__);
 					       
+					       consumer_(
+							 IOBuf::WrapBuffer(NULL,0),
+							 0);
 					     } else {
 					       if (doRead_==true) async_read_some(); 
 					     }

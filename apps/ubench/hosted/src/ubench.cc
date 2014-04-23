@@ -46,6 +46,7 @@ main(int argc, char **argv)
 #ifdef __FRONTEND_STREAM_TEST__
     printf("Enter lines of characters ('.' to terminte):\n");
     UNIX::sin->async_read_start([bindir](std::unique_ptr<ebbrt::IOBuf> buf,size_t avail) {
+	if (buf->Data()==NULL) {  printf("Stream EOF\n"); return; }
 	do {
 	  size_t n = write(STDOUT_FILENO, buf->Data(), buf->Length()); 
 	  if (n<=0) throw std::runtime_error("write to stdout failed");
@@ -57,6 +58,7 @@ main(int argc, char **argv)
 		
 		ebbrt::EbbRef<UNIX::InputStream> is = fis.Get();		  
 		is->async_read_start([](std::unique_ptr<ebbrt::IOBuf> buf,size_t avail) {
+		    if (buf->Data() == NULL) { printf("Stream EOF\n"); return; }
 		    do {
 		      size_t n = write(STDOUT_FILENO, buf->Data(), buf->Length()); 
 		      if (n<=0) throw std::runtime_error("write to stdout failed");
