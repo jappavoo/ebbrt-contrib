@@ -200,7 +200,7 @@ int process_img_args(int argc, char **argv)
 }
 
 
-#define _UBENCH_CMD_LINE_ARGS_TEST_
+//#define _UBENCH_CMD_LINE_ARGS_TEST_
 //#define _UBENCH_ENVIRONMENT_TEST_
 //#define _UBENCH_STANDARD_IN_TEST_
 #define _UBENCH_FILE_IN_TEST_
@@ -221,14 +221,16 @@ void AppMain()
 
 #ifdef _UBENCH_ENVIRONMENT_TEST_
   //  asm volatile ("jmp .");
-
+  ebbrt::kprintf("_UBENCH_ENVIRONMENT_TEST_: Start\n");
   for (int i=0; UNIX::environment->environ()[i]!=NULL; i++) {
     ebbrt::kprintf("%d: ev=%s\n", i, UNIX::environment->environ()[i]);
   }
   ebbrt::kprintf("getenv(\"hello\")=%s\n", UNIX::environment->getenv("hello"));
+ebbrt::kprintf("_UBENCH_ENVIRONMENT_TEST_: End\n");
 #endif
 
 #ifdef _UBENCH_STANDARD_IN_TEST_
+  ebbrt::kprintf("_UBENCH_STANDARD_IN_TEST_: Start\n");
   UNIX::sin->async_read_start([](std::unique_ptr<ebbrt::IOBuf> buf,size_t avail) {
 	do {
 	  ebbrt::console::Write((const char *)buf->Data(), buf->Length());
@@ -238,11 +240,13 @@ void AppMain()
 	  }
 	} while(buf->Pop()!=nullptr);
     });
+  ebbrt::kprintf("_UBENCH_STANDARD_IN_TEST_: End\n");
 #endif
 
 
 #ifdef _UBENCH_FILE_IN_TEST_
   //asm volatile ("jmp .");
+ebbrt::kprintf("_UBENCH_FILE_IN_TEST_: Start\n");
 ebbrt::kprintf("0:%s\n", __PRETTY_FUNCTION__);
   auto fistream = UNIX::root_fs->openInputStream("/etc/passwd");
 ebbrt::kprintf("1:%s\n", __PRETTY_FUNCTION__);
@@ -254,9 +258,11 @@ ebbrt::kprintf("1:%s\n", __PRETTY_FUNCTION__);
 	   } while(buf->Pop()!=nullptr);
     });
   });
+ebbrt::kprintf("_UBENCH_FILE_IN_TEST_: End\n");
 #endif
 
 #ifdef _UBENCH_BOOT_IMG_CMD_LINE_TEST_
+  ebbrt::kprintf("_UBENCH_BOOT_IMG_CMD_LINE_TEST_: Start\n");
   {
     int argc;
     char **argv;
@@ -272,9 +278,11 @@ ebbrt::kprintf("1:%s\n", __PRETTY_FUNCTION__);
       if (process_img_args(argc, argv) == -1) return;
     }
   }
+  ebbrt::kprintf("_UBENCH_BOOT_IMG_CMD_LINE_TEST_: End\n");
 #endif
 
 #ifdef _UBENCH_BENCHMARKS_
+  ebbrt::kprintf("_UBENCH_BENCHMARKS_: Start\n");
   // Base line C++ method dispatch numbers 
   for (int i=0; i<REPEAT_CNT; i++) {
     GlobalCounterTest();
@@ -291,7 +299,7 @@ ebbrt::kprintf("1:%s\n", __PRETTY_FUNCTION__);
 
 
   // Multicore Numbers
-  ebbrt::kprintf("ubench benchmarks done: END\n");
+  ebbrt::kprintf("_UBENCH_BENCHMARKS_: End\n");
 #endif
 
   return;

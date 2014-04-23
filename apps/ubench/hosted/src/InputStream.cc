@@ -146,7 +146,9 @@ namespace UNIX {
 					     // printf("free %p\n",p);
 					     count_ += n;
 					     if (count_ == len_) {
-					       printf("close stream here");
+					       printf("\n %s:%d * CLOSE STREAM LOGIC HERE *\n",
+						      __PRETTY_FUNCTION__, __LINE__);
+					       
 					     } else {
 					       if (doRead_==true) async_read_some(); 
 					     }

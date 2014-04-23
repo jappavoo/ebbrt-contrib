@@ -14,14 +14,14 @@
 
 #include "../../src/Unix.h"
 
-//#define __FRONT_END_TEST__
-
+#define __FRONTEND_STREAM_TEST__
+#define __BACKEND_TEST__
 int 
 main(int argc, char **argv)
 {
   printf("Hello World!!!\n");
   auto bindir = boost::filesystem::system_complete(argv[0]).parent_path() /
-    "/bm/ubench.elf32";
+    "bm/ubench.elf32";
 
   ebbrt::Runtime runtime;
   ebbrt::Context c(runtime);
@@ -43,31 +43,37 @@ main(int argc, char **argv)
     }
     printf("getenv(\"hello\")=%s\n", UNIX::environment->getenv("hello"));
 
-#ifdef __FRONT_END_TEST__
-  UNIX::sin->async_read_start([](std::unique_ptr<ebbrt::IOBuf> buf,size_t avail) {
+#ifdef __FRONTEND_STREAM_TEST__
+    printf("Enter lines of characters ('.' to terminte):\n");
+    UNIX::sin->async_read_start([bindir](std::unique_ptr<ebbrt::IOBuf> buf,size_t avail) {
 	do {
 	  size_t n = write(STDOUT_FILENO, buf->Data(), buf->Length()); 
 	  if (n<=0) throw std::runtime_error("write to stdout failed");
-	  if (!UNIX::sin->isFile() && (buf->Data()[0] == '.')) {
+	  if (buf->Data()[0] == '.') {
 	    UNIX::sin->async_read_stop();
+	    printf("open and dump /etc/passwd a stream"); 
+	    auto fistream = UNIX::root_fs->openInputStream("/etc/passwd");
+	    fistream.Then([bindir](ebbrt::Future<ebbrt::EbbRef<UNIX::InputStream>> fis) {
+		
+		ebbrt::EbbRef<UNIX::InputStream> is = fis.Get();		  
+		is->async_read_start([](std::unique_ptr<ebbrt::IOBuf> buf,size_t avail) {
+		    do {
+		      size_t n = write(STDOUT_FILENO, buf->Data(), buf->Length()); 
+		      if (n<=0) throw std::runtime_error("write to stdout failed");
+		    } while(buf->Pop()!=nullptr);
+		  });
+#ifdef __BACKEND_TEST__
+		ebbrt::node_allocator->AllocateNode(bindir.string());
+#endif
+	      });
 	    break;
 	  }
 	} while(buf->Pop()!=nullptr);
     });
-
-  auto fistream = UNIX::root_fs->openInputStream("/etc/passwd");
-  fistream.Then([](ebbrt::Future<ebbrt::EbbRef<UNIX::InputStream>> fis) {
-	       
-      ebbrt::EbbRef<UNIX::InputStream> is = fis.Get();		  
-      is->async_read_start([](std::unique_ptr<ebbrt::IOBuf> buf,size_t avail) {
-		      do {
-	    size_t n = write(STDOUT_FILENO, buf->Data(), buf->Length()); 
-	    if (n<=0) throw std::runtime_error("write to stdout failed");
-	  } while(buf->Pop()!=nullptr);
-	});
-    });
 #else
-    ebbrt::node_allocator->AllocateNode(bindir.string());
+#ifdef __BACKEND_TEST__
+  ebbrt::node_allocator->AllocateNode(bindir.string());
+#endif
 #endif
   }
 

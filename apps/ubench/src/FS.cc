@@ -37,7 +37,7 @@ UNIX::FS::Init(std::string &&path)
 
 UNIX::FS::FS(Root *root) : ebbrt::Messagable<UNIX::FS>(root->myId()),
 			   myRoot_(root) {
-#if 0
+#if 1
   auto fstr = myRoot_->getString();
   assert(fstr.Ready());
   std::string str = fstr.Get();
@@ -46,8 +46,8 @@ UNIX::FS::FS(Root *root) : ebbrt::Messagable<UNIX::FS>(root->myId()),
   {
     boost::crc_32_type  crc;
     crc.process_bytes( data, len );
-    printf("%s: data=%p len=%d crc=0x%x\n", __PRETTY_FUNCTION__, 
-	   data, len, crc.checksum());
+    printf("%s: data=%p len=%d crc=0x%x (%c)\n", __PRETTY_FUNCTION__, 
+	   data, len, crc.checksum(), data[0]);
   }
 #endif
 }
@@ -55,7 +55,10 @@ UNIX::FS::FS(Root *root) : ebbrt::Messagable<UNIX::FS>(root->myId()),
 ebbrt::Future<ebbrt::EbbRef<UNIX::InputStream>>
 UNIX::FS::Root::open_stream(std::string str)
 {
+#ifdef __EBBRT_BM__
   ebbrt::kprintf("21:%s\n", __PRETTY_FUNCTION__);
+#endif
+
   if (UNIX::fe == ebbrt::messenger->LocalNetworkId()) {
     throw std::runtime_error("FIXME: return a failed future");
   } else {
@@ -74,6 +77,24 @@ UNIX::FS::Root::open_stream(std::string str)
 			     }, std::move(str), std::placeholders::_1)
 			   );
     msg_buf->AppendChain(std::move(path));
+
+
+#ifdef __EBBRT_BM__
+    ebbrt::kprintf("msg_buf: Length:%d\n", msg_buf->Length());
+    for (unsigned int i=0; i<msg_buf->Length(); i++) {
+      ebbrt::kprintf("%02x", msg_buf->Data()[i]);
+      }
+    ebbrt::kprintf("\n");
+    
+    for (IOBuf *b=msg_buf->Next(); b->Data() != msg_buf->Data(); b=b->Next()) {
+      ebbrt::kprintf("b=%p Length:%d\n", b, b->Length());
+      for (unsigned int i=0; i<b->Length(); i++) {
+	ebbrt::kprintf("%02x", b->Data()[i]);
+      }
+      ebbrt::kprintf("\n");
+    }
+#endif
+
     theRep_->SendMessage(UNIX::fe, std::move(msg_buf));
     return p_->GetFuture();
   }
@@ -81,7 +102,11 @@ UNIX::FS::Root::open_stream(std::string str)
 
 void UNIX::FS::Root::process_message(NetId nid, 
 				     std::unique_ptr<ebbrt::IOBuf>&& buf) {
+
+#ifdef __EBBRT_BM__
   ebbrt::kprintf("20:%s\n", __PRETTY_FUNCTION__);
+#endif
+
   Root::Message *msg = (Root::Message *)buf->Data();
   switch (msg->type) {
   case kOPEN_STREAM:
@@ -128,7 +153,10 @@ void UNIX::FS::ReceiveMessage(ebbrt::Messenger::NetworkId nid,
 
 
 UNIX::FS::Root::Root(ebbrt::EbbId id) : myId_(id), theRep_(NULL), p_(NULL) {
+#ifdef __EBBRT_BM__
   ebbrt::kprintf("5:%s\n", __PRETTY_FUNCTION__);
+#endif
+
   open_stream_msg_.type = kOPEN_STREAM;
   stream_id_msg_.type = kSTREAM_ID;
   data_ = ebbrt::global_id_map->Get(id).Share();
@@ -139,11 +167,16 @@ UNIX::FS::Root::getRep_BIN() {
   std::lock_guard<std::mutex> lock{lock_};
   if (theRep_) return theRep_; // implicity drop lock
 
+#ifdef __EBBRT_BM__
   ebbrt::kprintf("11:%s\n", __PRETTY_FUNCTION__);
+#endif
+
   lock_.unlock();  // drop lock
   data_.Block();    // if necessary wait for our root data to be ready 
                     // blocks as needed but when done the data is there
+#ifdef __EBBRT_BM__
   ebbrt::kprintf("12:%s\n", __PRETTY_FUNCTION__);
+#endif
   data_.Get();      // do a get on the future to ensure
                     // that we throw any errors that occurred during 
                     // getting the data
@@ -178,7 +211,9 @@ UNIX::FS::Root::getRep_BIN() {
 // }
 UNIX::FS & 
 UNIX::FS::HandleFault(ebbrt::EbbId id) {
+#ifdef __EBBRT_BM__
   ebbrt::kprintf("10:%s\n", __PRETTY_FUNCTION__);
+#endif
  retry:
   {
     ebbrt::LocalIdMap::ConstAccessor rd_access;
@@ -234,7 +269,9 @@ UNIX::FS::openInputStream(std::string path)
 ebbrt::Future<ebbrt::EbbRef<UNIX::InputStream>>  
 UNIX::FS::openInputStream(std::string path) 
 {
+#ifdef __EBBRT_BM__
   ebbrt::kprintf("2:%s\n", __PRETTY_FUNCTION__);
+#endif
   return myRoot_->open_stream(path);
 }
 
