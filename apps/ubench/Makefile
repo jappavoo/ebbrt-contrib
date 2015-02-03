@@ -7,6 +7,6 @@
 all: Release
 
 Release:
-	$(MAKE) -C hosted/build/Release  -j8
+	$(MAKE) -C hosted/build/Release 
 Debug:
-	$(MAKE) -C hosted/build/Debug -j8
+	$(MAKE) -C hosted/build/Debug 

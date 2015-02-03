@@ -12,14 +12,14 @@
 #include <ebbrt/Runtime.h>
 #include <stdio.h>
 
+#include "../../src/ubenchCommon.h"
 #include "../../src/Unix.h"
 
-#define __FRONTEND_STREAM_TEST__
 #define __BACKEND_TEST__
+
 int 
 main(int argc, char **argv)
 {
-  printf("Hello World!!!\n");
   auto bindir = boost::filesystem::system_complete(argv[0]).parent_path() /
     "bm/ubench.elf32";
 
@@ -29,21 +29,15 @@ main(int argc, char **argv)
 
   { // scope to trigger automatic deactivate on exit
     ebbrt::ContextActivation activation(c);
+
     // ensure clean quit on ctrl-c
     sig.async_wait([&c](const boost::system::error_code& ec,
                         int signal_number) { c.io_service_.stop(); });
 
     UNIX::Init(argc, (const char **)argv);
-    for (int i=0; i<UNIX::cmd_line_args->argc(); i++) {
-      printf("argv[%d]=%s\n",i,UNIX::cmd_line_args->argv(i));
-    }
+    AppMain();
 
-    for (int i=0; UNIX::environment->environ()[i]!=NULL; i++) {
-      printf("%d: ev=%s\n", i, UNIX::environment->environ()[i]);
-    }
-    printf("getenv(\"hello\")=%s\n", UNIX::environment->getenv("hello"));
-
-#ifdef __FRONTEND_STREAM_TEST__
+#ifndef NO_UNIX_IO
     printf("Enter lines of characters ('.' to terminte):\n");
     UNIX::sin->async_read_start([bindir](std::unique_ptr<ebbrt::IOBuf> buf,size_t avail) {
 	if (buf->Data()==NULL) {  printf("Stream EOF\n"); return; }

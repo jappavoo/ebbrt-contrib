@@ -5,6 +5,7 @@
 #ifndef __UNIX_EBBRT_H__
 #define __UNIX_EBBRT_H__
 
+#define NO_UNIX_IO
 
 #include <ebbrt/Messenger.h>
 #include <ebbrt/Runtime.h>
@@ -44,6 +45,7 @@ namespace UNIX {
     static ebbrt::Future<ebbrt::EbbRef<CmdLineArgs>> Init(int argc, 
 							  const char **argv);
     void destroy();
+    char **data() { return argv_vector.data(); }
     char *argv(int i) { return argv_vector[i]; }
     int argc() { return argc_; }
   };
@@ -227,15 +229,19 @@ namespace UNIX {
   __attribute__ ((unused)) static void Init(int argc, const char **argv) {
     CmdLineArgs::Init(argc, argv).Block();
     Environment::Init().Block();
+#ifndef NO_UNIX_IO 
     InputStream::InitSIn().Block();
     FS::Init("/").Block();
+#endif
   }
 #endif
 
   constexpr auto cmd_line_args = ebbrt::EbbRef<CmdLineArgs>(kCmdLineArgsId);
   constexpr auto environment =  ebbrt::EbbRef<Environment>(kEnvironmentId);
+#ifdef NO_UNIX_IO
   constexpr auto sin = ebbrt::EbbRef<InputStream>(kSInId);
   constexpr auto root_fs = ebbrt::EbbRef<FS>(kRootFSId);
+#endif
 };
 
 #endif

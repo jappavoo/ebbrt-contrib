@@ -39,11 +39,13 @@ UNIX::CmdLineArgs::CmdLineArgs(Root *root) : myRoot_(root)
   argc_ = 0;
   for (i=0; i<len; i++) if (data[i] == 0) argc_++;
 
-  argv_vector.reserve(argc_);
+  argv_vector.reserve(argc_+1); // leave space for all arguments and null termination
+
   for (i=0,j=1,argv_vector.emplace_back((char *)data); j < argc_; i++) {
     if (data[i] == 0) { argv_vector.emplace_back((char *)&(data[i+1]));  j++; }  
   }
-
+  // null terminate 
+  argv_vector.emplace_back((char *)0);
 }
 
 UNIX::CmdLineArgs::Root::Root(ebbrt::EbbId id) : myId_(id), theRep_(NULL)  {
