@@ -44,7 +44,7 @@ UNIX::Environment::Init()
 UNIX::Environment::Environment(Root *root) : myRoot_(root), environ_(NULL) {
   auto fstr = myRoot_->getString();
   assert(fstr.Ready());
-  std::string str = fstr.Get();
+  std::string& str = fstr.Get();
   const char *data = str.data();
   int len = str.size();
   {
@@ -60,7 +60,7 @@ UNIX::Environment::Environment(Root *root) : myRoot_(root), environ_(NULL)
   // add code here to initialized argc and argv from root data pointer
   auto fstr = myRoot_->getString();
   assert(fstr.Ready());
-  std::string str = fstr.Get();
+  std::string& str = fstr.Get();
   const char *data = str.data();
   int len = str.size();
   int i,j,numvar;
@@ -100,6 +100,7 @@ UNIX::Environment::Root::getRep_BIN() {
   data_.Get();      // do a get on the future to ensure
                     // that we throw any errors that occurred during 
                     // getting the data
+
   lock_.lock();     // reaquire lock
   if (theRep_ == NULL)  { 
     // now that we are ready create the rep if necessary

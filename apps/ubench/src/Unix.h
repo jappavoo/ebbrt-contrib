@@ -5,8 +5,6 @@
 #ifndef __UNIX_EBBRT_H__
 #define __UNIX_EBBRT_H__
 
-#define NO_UNIX_IO
-
 #include <ebbrt/Messenger.h>
 #include <ebbrt/Runtime.h>
 #include <ebbrt/Future.h>
@@ -14,6 +12,7 @@
 #include <ebbrt/Message.h>
 
 #include "StaticEbbIds.h"
+
 
 namespace UNIX {
   class CmdLineArgs {      
@@ -223,25 +222,24 @@ namespace UNIX {
   
 #ifdef __EBBRT_BM__
   __attribute__ ((unused)) static void Init() {
-  fe = ebbrt::Messenger::NetworkId(ebbrt::runtime::Frontend());
-}
+    fe = ebbrt::Messenger::NetworkId(ebbrt::runtime::Frontend());
+  }
 #else
   __attribute__ ((unused)) static void Init(int argc, const char **argv) {
     CmdLineArgs::Init(argc, argv).Block();
     Environment::Init().Block();
-#ifndef NO_UNIX_IO 
-    InputStream::InitSIn().Block();
-    FS::Init("/").Block();
-#endif
+    //  FIXME: JA_HACK
+    //    InputStream::InitSIn().Block();
+    //    FS::Init("/").Block();
   }
 #endif
 
   constexpr auto cmd_line_args = ebbrt::EbbRef<CmdLineArgs>(kCmdLineArgsId);
   constexpr auto environment =  ebbrt::EbbRef<Environment>(kEnvironmentId);
-#ifdef NO_UNIX_IO
-  constexpr auto sin = ebbrt::EbbRef<InputStream>(kSInId);
-  constexpr auto root_fs = ebbrt::EbbRef<FS>(kRootFSId);
-#endif
+  // FIXME: JA_HACK
+  // constexpr auto sin = ebbrt::EbbRef<InputStream>(kSInId);
+  // constexpr auto root_fs = ebbrt::EbbRef<FS>(kRootFSId);
+
 };
 
 #endif
