@@ -205,11 +205,21 @@ void ebb_test(struct Arguments *args)
 
 }
 
+extern void hoard_threadtest(int,char **);
+
 void malloc_test(struct Arguments *args)
 {
   if (!args->tests.malloc) return;
 
   MY_PRINT("_UBENCH_MALLOC_TEST_: START\n");
+
+#ifdef __EBBRT_BM__
+  hoard_threadtest(UNIX::cmd_line_args->argc()-optind,
+		   &(UNIX::cmd_line_args->data()[optind]));
+#else
+  MY_PRINT("NYI\n");
+#endif
+
   MY_PRINT("_UBENCH_MALLOC_TEST_: END\n");
 }
 
@@ -221,6 +231,9 @@ if (!args->tests.cmdline) return;
   for (int i=0; i<UNIX::cmd_line_args->argc(); i++) {
     MY_PRINT("UNIX::cmd_line_args->argv(%d)=%s\n",i,
 		   UNIX::cmd_line_args->argv(i));
+  }
+  for (int i=optind; i < UNIX::cmd_line_args->argc(); i++) {
+    MY_PRINT("non option arguments %s\n", UNIX::cmd_line_args->argv(i));
   }
   MY_PRINT("_UBENCH_CMDLINE_TEST_: END\n");
 #endif
