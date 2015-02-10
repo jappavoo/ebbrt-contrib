@@ -22,7 +22,9 @@ struct Arguments {
     int filein;
     int cmdline;
     int env;
+    int spawn;
   } tests;
+  int backend;
   int repeatCnt;
   int actionCnt;
 };
@@ -31,5 +33,12 @@ int process_args(int, char **, struct Arguments *);
 void cmdline_test(struct Arguments *);
 void env_test(struct Arguments *);
 void AppMain(void);
+
+struct MainArgs {
+  int argc;
+  char **argv;
+};
+
+extern struct MainArgs margs;
 
 #endif

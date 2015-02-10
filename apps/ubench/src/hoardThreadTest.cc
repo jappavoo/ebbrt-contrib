@@ -44,15 +44,25 @@ using namespace std::chrono;
 #include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <inttypes.h>
 
 #else
 #include <stdlib.h>
+#ifdef __EBBRT_BM__
 #include <ebbrt/Cpu.h>
+#define MY_PRINT ebbrt::kprintf
+#else
+#include <ebbrt/Runtime.h>
+#include <ebbrt/Context.h>
+#include "Cpu.h"
+#define MY_PRINT printf
+#endif
+
 #include <ebbrt/SpinBarrier.h>
 #include <ebbrt/Debug.h>
 #include <ebbrt/EventManager.h>
 
-#define MY_PRINT ebbrt::kprintf
+
 
 inline uint64_t
 rdtsc(void) 
@@ -71,12 +81,26 @@ void
 Work() 
 {
   uint64_t start, end;
+
+//#ifdef __EBBRT_BM__
+//MY_PRINT("%d: Work()\n", size_t(ebbrt::Cpu::GetMine()));
+//#else
+//MY_PRINT("%zd: %zd: Work()\n", size_t(ebbrt::Cpu::GetMine()), size_t(*ebbrt::active_context));
+//#endif
+
   wbar->Wait();
   start = rdtsc();
   worker();
   end = rdtsc();
   wbar->Wait();
-  MY_PRINT("%d: Work Time %lld\n", ebbrt::Cpu::GetMine(), end - start);
+#ifdef __EBBRT_BM__
+  MY_PRINT("%d: Work Time %llu\n", size_t(ebbrt::Cpu::GetMine()), 
+    end - start);
+#else
+  MY_PRINT("%zd: %zd: Work Time %zd\n", size_t(ebbrt::Cpu::GetMine()),
+					size_t(*ebbrt::active_context), 
+					       size_t(end - start));
+#endif
 }
 #endif
 
@@ -106,6 +130,7 @@ void worker (void)
   int i, j;
   Foo ** a;
   a = new Foo * [nobjects / nthreads];
+
 
   for (j = 0; j < niterations; j++) {
 
@@ -186,20 +211,40 @@ int hoard_threadtest (int argc, char * argv[])
   auto elapsed = duration_cast<duration<double>>(stop - start);
   cout << "Time elapsed = " << elapsed.count() << endl;
   delete [] threads;
+
 #else
+
   if ((unsigned int)nthreads > ebbrt::Cpu::Count())  nthreads = ebbrt::Cpu::Count();
+
+  MY_PRINT ("Running threadtest for %d threads, %d iterations,"
+    " %d objects, %d work and %d size...\n", 
+    nthreads, niterations, nobjects, work, size);
 
   wbar = new ebbrt::SpinBarrier(nthreads);
   auto start = rdtsc();
-  MY_PRINT ("Running threadtest for %d threads, %d iterations, %d objects, %d work and %d size...\n", nthreads, niterations, nobjects, work, size);
 
-for (size_t i = 1; i < (unsigned int)nthreads; ++i)  {
-     ebbrt::event_manager->SpawnRemote(Work, i);
+  for (size_t i = 1; i < (unsigned int)nthreads; ++i)  {
+#ifdef __EBBRT_BM__
+    ebbrt::event_manager->SpawnRemote([](){
+  //  MY_PRINT("spawned:%d\n", size_t(ebbrt::Cpu::GetMine()));
+	Work();
+    }, i);
   }
   Work();
-  MY_PRINT("Time elapsed = %lld\n",  rdtsc() - start);
-#endif
+  MY_PRINT("Time elapsed = %llu\n", (rdtsc() - start));
 
+#else
+  ebbrt::event_manager->Spawn([]() {
+  //    MY_PRINT("spawned: %zd %zd: %s:%d\n", size_t(ebbrt::Cpu::GetMine()), 
+  //    	     size_t(*ebbrt::active_context),
+  //    __FILE__, __LINE__);
+        Work();
+    }, ebbrt::Cpu::GetByIndex(i)->get_context());
+  }
+  Work();
+  MY_PRINT("Time elapsed = %zd\n", (size_t)(rdtsc() - start));
+#endif
+#endif
 
   return 0;
 }

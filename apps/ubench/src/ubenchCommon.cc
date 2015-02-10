@@ -8,6 +8,16 @@
 #include <cctype>
 #include <stdio.h>
 
+#include <boost/filesystem.hpp>
+#include <boost/container/static_vector.hpp>
+#include <ebbrt/Context.h>
+#include <ebbrt/ContextActivation.h>
+#include <ebbrt/GlobalIdMap.h>
+#include <ebbrt/StaticIds.h>
+#include <ebbrt/NodeAllocator.h>
+
+#include "Cpu.h"
+
 #define MY_PRINT printf
 
 #else
@@ -29,6 +39,8 @@ void  bootimgargs_test(struct Arguments *);
 void  stdin_test(struct Arguments *);
 void  filein_test(struct Arguments *);
 #endif
+
+#include <ebbrt/SpinBarrier.h>
  
 #include "Unix.h"
 #include "ubenchCommon.h"
@@ -176,15 +188,15 @@ cpp_test(struct Arguments *args)
   if (!args->tests.cpp) return;
   int rcnt = args->repeatCnt;
   int acnt = args->actionCnt;
-
-    MY_PRINT("_UBENCH_CPP_TEST_: START\n");
-    // Base line C++ method dispatch numbers 
-    for (int i=0; i<rcnt; i++) {
-     GlobalCounterTest(acnt);
-     StackCounterTest(acnt);
-     HeapCounterTest(acnt);
-    }
-    MY_PRINT("_UBENCH_CPP_TEST_: END\n");
+  
+  MY_PRINT("_UBENCH_CPP_TEST_: START\n");
+  // Base line C++ method dispatch numbers 
+  for (int i=0; i<rcnt; i++) {
+    GlobalCounterTest(acnt);
+    StackCounterTest(acnt);
+    HeapCounterTest(acnt);
+  }
+  MY_PRINT("_UBENCH_CPP_TEST_: END\n");
 }
 
 void event_test(struct Arguments *args)
@@ -213,12 +225,8 @@ void malloc_test(struct Arguments *args)
 
   MY_PRINT("_UBENCH_MALLOC_TEST_: START\n");
 
-#ifdef __EBBRT_BM__
   hoard_threadtest(UNIX::cmd_line_args->argc()-optind,
 		   &(UNIX::cmd_line_args->data()[optind]));
-#else
-  MY_PRINT("NYI\n");
-#endif
 
   MY_PRINT("_UBENCH_MALLOC_TEST_: END\n");
 }
@@ -251,6 +259,43 @@ if (!args->tests.env)  return;
 #endif
 }
 
+void
+spawn_test(struct Arguments *args)
+{
+  static ebbrt::SpinBarrier bar(ebbrt::Cpu::Count());
+  static std::atomic<size_t> scnt;
+  size_t n = ebbrt::Cpu::Count();
+
+  if (!args->tests.spawn)  return;
+  MY_PRINT("_UBENCH_SPAWN_TEST_: Start\n");
+
+  for (size_t i=0; i<n; i++) {
+#ifndef __EBBRT_BM__
+    ebbrt::Cpu *cpu = ebbrt::Cpu::GetByIndex(i);
+    ebbrt::Context *ctxt = cpu->get_context();
+    ebbrt::event_manager->Spawn([n]() {
+      MY_PRINT("HELLO: spawned: %zd %zd: %s:%d\n", size_t(ebbrt::Cpu::GetMine()), 
+	     size_t(*ebbrt::active_context),
+	     __FILE__, __LINE__);
+      bar.Wait();
+      MY_PRINT("GOODBYE: spawned: %zd %zd: %s:%d\n", size_t(ebbrt::Cpu::GetMine()), 
+	     size_t(*ebbrt::active_context),
+	     __FILE__, __LINE__);
+      scnt++;
+      if (scnt==n)   MY_PRINT("_UBENCH_SPAWN_TEST_: END\n");
+      }, ctxt);
+#else
+    ebbrt::event_manager->SpawnRemote([n]() {
+      MY_PRINT("HELLO: spawned: %d\n", size_t(ebbrt::Cpu::GetMine()));
+      bar.Wait();
+      MY_PRINT("GOODBYE: spawned:%d\n", size_t(ebbrt::Cpu::GetMine()));
+      scnt++;
+      if (scnt==n)   MY_PRINT("_UBENCH_SPAWN_TEST_: END\n");
+      }, i);
+#endif
+  }
+}
+
 int 
 process_args(int argc, char **argv, struct Arguments *args) 
 {
@@ -263,13 +308,14 @@ process_args(int argc, char **argv, struct Arguments *args)
 
   opterr = 0;
 
-  while ((c = getopt (argc, argv, "hCEIF:cevm")) != -1) {
+  while ((c = getopt (argc, argv, "hBCEIF:cevms")) != -1) {
     switch (c)
       { 
       case 'h':
-	MY_PRINT("%s: [-h] [-C] [-E] [-I] [-F file] [-c] [-e] [-v] [-m]\n"
+	MY_PRINT("%s: [-h] [-B] [-C] [-E] [-I] [-F file] [-c] [-e] [-v] [-m] [-s]\n"
 		" EbbRT micro benchmarks\n"
 		" -h : help\n"
+                " -B : run tests on Backend\n"
                 " -C : Command line test\n"
                 " -E : Environment test\n"
 		" -I : Standard Input test\n"
@@ -277,8 +323,12 @@ process_args(int argc, char **argv, struct Arguments *args)
 		" -c : run basic C++ tests\n"
 		" -e : run basic Ebb tests\n"
 		" -v : run Event tests\n"
-		" -m : malloc tests\n", argv[0]);
+		" -m : malloc tests\n"
+   	        " -s : spawn test\n", argv[0]);
 	return -1;
+      case 'B':
+	args->backend = 1;
+	break;
       case 'C':
 	args->tests.cmdline = 1;
 	break;
@@ -303,6 +353,9 @@ process_args(int argc, char **argv, struct Arguments *args)
       case 'v':
 	args->tests.event = 1;
 	break;
+      case 's':
+	args->tests.spawn = 1;
+	break;
       case '?':
 	if (isprint (optopt)) {
 	  MY_PRINT("Unknown option `-%c'.\n", optopt);
@@ -318,12 +371,15 @@ process_args(int argc, char **argv, struct Arguments *args)
   return 0;
 }
 
+
 void AppMain()
 {
   struct Arguments args;
 
 #ifdef __EBBRT_BM__
   UNIX::Init();
+#else 
+  UNIX::Init(margs.argc, (const char **)margs.argv);
 #endif
 
   process_args(UNIX::cmd_line_args->argc(), UNIX::cmd_line_args->data(), &args);
@@ -343,7 +399,18 @@ void AppMain()
   ebb_test(&args);
   event_test(&args);
   malloc_test(&args);
+  spawn_test(&args);
   MY_PRINT("_UBENCH_BENCHMARKS_: End\n");
+#endif
+
+#ifndef __EBBRT_BM__
+  //  frontendio_test();
+  if (args.backend)  {
+    auto bindir = 
+      boost::filesystem::system_complete(UNIX::cmd_line_args->argv(0)).parent_path() /
+      "bm/ubench.elf32";
+    ebbrt::node_allocator->AllocateNode(bindir.string());
+  }
 #endif
 
   return;
