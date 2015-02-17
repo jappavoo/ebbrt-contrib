@@ -12,6 +12,8 @@
 #include <ebbrt/Debug.h>
 #include <ebbrt/EbbAllocator.h>
 #include <stdio.h>
+#include <ebbrt/StaticIOBuf.h>
+#include <ebbrt/UniqueIOBuf.h>
 
 
 #include <ebbrt/Buffer.h>
@@ -22,8 +24,35 @@ typedef ebbrt::MovableFunction<void(std::unique_ptr<ebbrt::IOBuf>&&,
 				    size_t avail)> ebbrtHandler;
 typedef boost::asio::posix::stream_descriptor asioSD;
 typedef boost::system::error_code boostEC;
-typedef ebbrt::IOBuf IOBuf;
 typedef ebbrt::Messenger::NetworkId NetId;
+
+namespace ebbrt {
+  class StaticIOBufWithDisposalOwner {
+  public:
+    StaticIOBufWithDisposalOwner(const uint8_t* ptr, size_t len, 
+    ebbrt::MovableFunction<void()> disposal) noexcept {
+      ptr_ = ptr;
+      capacity_ = len;
+      disposal_ = std::move(disposal);
+    }
+    StaticIOBufWithDisposalOwner(StaticIOBufWithDisposalOwner&&) = default;
+    StaticIOBufWithDisposalOwner& operator=(StaticIOBufWithDisposalOwner&&) = default;
+
+    ~StaticIOBufWithDisposalOwner() {
+      disposal_();
+    }
+    const uint8_t* Buffer() const { return ptr_; }
+    size_t Capacity() const { return capacity_; }
+    
+  private:
+    const uint8_t* ptr_;
+    size_t capacity_;
+    ebbrt::MovableFunction<void()> disposal_;
+  };
+
+  typedef IOBufBase<StaticIOBufWithDisposalOwner> StaticIOBufWithDisposal;  
+}
+typedef ebbrt::StaticIOBufWithDisposal IOBuf;
 
 // also could use null_buffers() with async_read_some(null_buffers(), handler);
 namespace UNIX {
@@ -116,48 +145,51 @@ namespace UNIX {
 						 ) 
 						{
 						  size_t avail;
-						  if (ec) {printf("ERROR: on Stream"); return;}
+						  if (ec) {
+						    printf("ERROR: on Stream\n"); 
+						    consumer_(nullptr,0);
+						    return;
+						  }
 						  {
 						    boostEC cec;
-						  sd_->io_control(asioAvail_,cec);
-						  if (cec) {printf("ERROR: on readable"); return;}
-						  avail = asioAvail_.get();
+						    sd_->io_control(asioAvail_,cec);
+						    if (cec) {printf("ERROR: on readable"); return;}
+						    avail = asioAvail_.get();
 						  }
 						  std::unique_ptr<IOBuf> iobuf = 
-						    std::unique_ptr<IOBuf>(new IOBuf((void*)buffer_, 
-										     size, 
-										     [this,size](void*p){
-										       // printf("FREE %p\n",p);
-										       count_ += size;
-										     if (doRead_==true) async_read_some(); 
-										     }));
+						    IOBuf::Create<IOBuf>((const uint8_t *)buffer_, 
+									 size, 
+									 [this,size](){
+									   // printf("FREE %p\n",p);
+									   count_ += size;
+									   if (doRead_==true) async_read_some(); 
+									 });
 						  consumer_(std::move(iobuf),avail);
 						}
 						)
 			 );
     } else {
-      size_t n;
       if (count_ < len_) {
-	n = read(fd_, buffer_, kBufferSize);
-	if (n<0) throw std::runtime_error("read of regular file failed");
-	std::unique_ptr<IOBuf> iobuf = 
-	  std::unique_ptr<IOBuf>(new IOBuf((void*)buffer_, n, 
-					   [this,n](void*p){
-					     // printf("free %p\n",p);
-					     count_ += n;
-					     if (count_ == len_) {
-					       printf("\n %s:%d * CLOSE STREAM LOGIC HERE *\n",
-						      __PRETTY_FUNCTION__, __LINE__);
-					       
-					       consumer_(
-							 IOBuf::WrapBuffer(NULL,0),
-							 0);
-					     } else {
-					       if (doRead_==true) async_read_some(); 
-					     }
-					   }));
-	consumer_(std::move(iobuf),len_-(count_+n));
-	
+	ebbrt::event_manager->Spawn(
+				    [this]() { 
+				      size_t n = read(fd_, buffer_, kBufferSize);
+				      if (n<0) throw std::runtime_error("read of regular file failed");
+				      std::unique_ptr<IOBuf> iobuf = IOBuf::Create<IOBuf>
+					(
+					 (const uint8_t *)buffer_, n, [this,n](){
+					   // printf("free %p\n",p);
+					   count_ += n;
+					   if (count_ == len_) {
+					     printf("\n %s:%d * CLOSE STREAM LOGIC HERE *\n",
+						    __PRETTY_FUNCTION__, __LINE__);
+					     consumer_(nullptr,0);
+					     return;
+					   } else {
+					     if (doRead_==true) async_read_some(); 
+					   }
+					 });
+				      consumer_(std::move(iobuf),len_-(count_+n)); 
+				    });
       }
     }
   }

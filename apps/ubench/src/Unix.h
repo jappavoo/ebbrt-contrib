@@ -165,7 +165,7 @@ namespace UNIX {
       ebbrt::kprintf("\nStopping Streaming Read\n"); 
 #else
       printf("\nStopping Streaming Read\n"); 
-      sd_->cancel();
+      if (sd_) sd_->cancel();
 #endif
       doRead_=false; 
       myRoot_->stop_stream();
@@ -186,7 +186,10 @@ namespace UNIX {
       FS *theRep_;
       ebbrt::SharedFuture<std::string> data_;
       ebbrt::Promise<ebbrt::EbbRef<InputStream>> *p_;
-      enum MessageType { kOPEN_STREAM, kSTREAM_ID};
+      // FIXME: JA KLUGDE UNIX_EXIT does not belong here
+      //        but too lazy to add a process object
+      //        Add Process Object that has exit etc.
+      enum MessageType { kOPEN_STREAM, kSTREAM_ID, kPROCESS_EXIT};
       struct Message {
 	MessageType type;
       };
@@ -195,6 +198,9 @@ namespace UNIX {
       struct StreamIdMsg : Message {
 	ebbrt::EbbId id;
       } stream_id_msg_;
+      struct ProcessExitMsg : Message {
+	int val;
+      } process_exit_msg_;
       friend FS;
     public:
       Root(ebbrt::EbbId id);
@@ -202,6 +208,7 @@ namespace UNIX {
       FS * getRep_BIN();
       ebbrt::SharedFuture<std::string> getString() { return data_; }
       ebbrt::Future<ebbrt::EbbRef<InputStream>> open_stream(std::string);
+      void process_exit(int val);
       void process_message(ebbrt::Messenger::NetworkId, 
 			   std::unique_ptr<ebbrt::IOBuf>&&);
     }; 
@@ -215,6 +222,7 @@ namespace UNIX {
     static ebbrt::Future<ebbrt::EbbRef<FS>> Init(std::string &&path);
     void destroy();
     ebbrt::Future<ebbrt::EbbRef<InputStream>>  openInputStream(std::string path);
+    void processExit(int val);
   };
 
 
@@ -228,17 +236,15 @@ namespace UNIX {
   __attribute__ ((unused)) static void Init(int argc, const char **argv) {
     CmdLineArgs::Init(argc, argv).Block();
     Environment::Init().Block();
-    //  FIXME: JA_HACK
-    //    InputStream::InitSIn().Block();
-    //    FS::Init("/").Block();
+    InputStream::InitSIn().Block();
+    FS::Init("/").Block();
   }
 #endif
 
   constexpr auto cmd_line_args = ebbrt::EbbRef<CmdLineArgs>(kCmdLineArgsId);
   constexpr auto environment =  ebbrt::EbbRef<Environment>(kEnvironmentId);
-  // FIXME: JA_HACK
-  // constexpr auto sin = ebbrt::EbbRef<InputStream>(kSInId);
-  // constexpr auto root_fs = ebbrt::EbbRef<FS>(kRootFSId);
+  constexpr auto sin = ebbrt::EbbRef<InputStream>(kSInId);
+  constexpr auto root_fs = ebbrt::EbbRef<FS>(kRootFSId);
 
 };
 

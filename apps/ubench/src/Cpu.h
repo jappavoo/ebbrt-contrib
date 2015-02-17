@@ -27,7 +27,9 @@ namespace ebbrt {
       return 2;
 #endif
     }
-    
+    static void Shutdown(void);
+    static void Exit(int val);
+
     void Init();
     operator size_t() const { return index_; }
     Nid nid() const { return nid_; }
@@ -42,10 +44,11 @@ namespace ebbrt {
     static volatile int inited_;
     static void * run(void *arg);    
     static Runtime rt_;
-    static thread_local Cpu* my_cpu_tls_;
-    
+    static thread_local Cpu* my_cpu_tls_;    
     static std::mutex init_lock_;
-    static int numCpus;
+    static int numCpus_;
+    static std::atomic<int> shutdown_;
+
     size_t index_;
     pthread_t tid_;
     Nid nid_;

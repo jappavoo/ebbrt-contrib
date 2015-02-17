@@ -1,6 +1,7 @@
 #include <signal.h>
 
 #include <array>
+#include <memory>
 
 #include <ebbrt/EbbId.h>
 #include <ebbrt/LocalIdMap.h>
@@ -9,14 +10,14 @@
 #include <ebbrt/Runtime.h>
 #include <ebbrt/Debug.h>
 #include <stdio.h>
-
+#include <ebbrt/StaticIOBuf.h>
+#include <ebbrt/UniqueIOBuf.h>
 
 #include <ebbrt/Buffer.h>
 #include "Unix.h"
 
 EBBRT_PUBLISH_TYPE(UNIX, InputStream);
 
-typedef ebbrt::IOBuf IOBuf;
 typedef ebbrt::Messenger::NetworkId NetId;
 
 #ifdef __EBBRT_BM__
@@ -27,26 +28,27 @@ namespace UNIX {
 
   void InputStream::Root::start_stream()
   {
-    if (UNIX::fe == ebbrt::messenger->LocalNetworkId()) return;
-    else {
-      std::unique_ptr<IOBuf> msg_buf =  
-	std::unique_ptr<IOBuf>(new IOBuf((void*)&stream_start_msg_, 
-					 sizeof(stream_start_msg_),
-					 [](void*){}));
+#ifndef __EBBRT_BM__
+    return;
+#else
+      auto msg_buf = std::unique_ptr<ebbrt::StaticIOBuf>
+	(new ebbrt::StaticIOBuf((const uint8_t *)&stream_start_msg_,
+				(size_t)sizeof(stream_start_msg_)));
       theRep_->SendMessage(UNIX::fe, std::move(msg_buf));
-    }
+#endif
   }
 
   void InputStream::Root::stop_stream()
   {
-    if (UNIX::fe == ebbrt::messenger->LocalNetworkId()) return;
-    else {
-      std::unique_ptr<IOBuf> msg_buf =  
-	std::unique_ptr<IOBuf>(new IOBuf((void*)&stream_stop_msg_, 
-					 sizeof(stream_stop_msg_),
-					 [](void*){}));
+#ifndef __EBBRT_BM__
+    return;
+#else
+      auto msg_buf =  
+	std::unique_ptr<ebbrt::StaticIOBuf>
+	(new ebbrt::StaticIOBuf((const uint8_t *)&stream_stop_msg_,
+				(size_t)sizeof(stream_stop_msg_)));
       theRep_->SendMessage(UNIX::fe, std::move(msg_buf));
-    }
+#endif
   }
 
   void InputStream::Root::process_message(NetId nid, 
@@ -63,10 +65,10 @@ namespace UNIX {
 				  (std::unique_ptr<ebbrt::IOBuf> buf,size_t avail) 
 				  {
 				    stream_data_msg_.avail = avail;
-				    std::unique_ptr<IOBuf> msg_buf =  
-				      std::unique_ptr<IOBuf>(new IOBuf((void*)&stream_data_msg_, 
-								     sizeof(stream_data_msg_),
-								     [](void*){}));
+				    auto msg_buf = std::unique_ptr<ebbrt::StaticIOBuf>
+				      (new ebbrt::StaticIOBuf
+				       ((const uint8_t *)&stream_data_msg_,
+					(size_t)sizeof(stream_data_msg_)));
 				    //printf("type:%d avail:%ld\n", 
 				    //  stream_data_msg_.type,
 				    //  stream_data_msg_.avail);
@@ -84,7 +86,10 @@ namespace UNIX {
 	buf->Advance(sizeof(StreamDataMsg));
 	printf("\nbuf->Length()=%ld\n", buf->Length());
 	if (buf->Length() == 0) {
-	  theRep_->consumer_(IOBuf::WrapBuffer(NULL,0),0);
+	  theRep_->consumer_(
+			     std::unique_ptr<ebbrt::StaticIOBuf>
+			     (new ebbrt::StaticIOBuf
+			      ((const uint8_t *)NULL,(size_t)0)),0);
 	} else {
 	  theRep_->consumer_(std::move(buf), m->avail);
 	}

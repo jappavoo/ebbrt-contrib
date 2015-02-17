@@ -16,6 +16,9 @@
 #include <ebbrt/StaticIds.h>
 #include <ebbrt/NodeAllocator.h>
 
+#include <ebbrt/Debug.h>
+#include <ebbrt/Console.h>
+
 #include "Cpu.h"
 
 #define MY_PRINT printf
@@ -23,8 +26,6 @@
 #else
 
 // BAREMETAL
-#include <ebbrt/Debug.h>
-#include <ebbrt/Console.h>
 #include <stdint.h>
 #include <inttypes.h>
 #include <assert.h>
@@ -33,11 +34,12 @@
 #include <strings.h>
 #include <cctype>
 
+#include <ebbrt/Debug.h>
+#include <ebbrt/Console.h>
+
 #define MY_PRINT ebbrt::kprintf
 
 void  bootimgargs_test(struct Arguments *);
-void  stdin_test(struct Arguments *);
-void  filein_test(struct Arguments *);
 #endif
 
 #include <ebbrt/SpinBarrier.h>
@@ -233,7 +235,6 @@ void malloc_test(struct Arguments *args)
 
 void cmdline_test(struct Arguments *args) 
 {
-#ifdef _UBENCH_CMD_LINE_ARGS_TEST_
 if (!args->tests.cmdline) return;
   MY_PRINT("_UBENCH_CMDLINE_TEST_: Start\n");
   for (int i=0; i<UNIX::cmd_line_args->argc(); i++) {
@@ -244,11 +245,9 @@ if (!args->tests.cmdline) return;
     MY_PRINT("non option arguments %s\n", UNIX::cmd_line_args->argv(i));
   }
   MY_PRINT("_UBENCH_CMDLINE_TEST_: END\n");
-#endif
 }
 
 void env_test(struct Arguments *args) {
-#ifdef _UBENCH_ENVIRONMENT_TEST_
 if (!args->tests.env)  return;
   MY_PRINT("_UBENCH_ENVIRONMENT_TEST_: Start\n");
   for (int i=0; UNIX::environment->environ()[i]!=NULL; i++) {
@@ -256,24 +255,24 @@ if (!args->tests.env)  return;
   }
   MY_PRINT("getenv(\"hello\")=%s\n", UNIX::environment->getenv("hello"));
   MY_PRINT("_UBENCH_ENVIRONMENT_TEST_: End\n");
-#endif
 }
 
 void
 spawn_test(struct Arguments *args)
 {
   static ebbrt::SpinBarrier bar(ebbrt::Cpu::Count());
-  static std::atomic<size_t> scnt;
   size_t n = ebbrt::Cpu::Count();
-
+  size_t theCpu=ebbrt::Cpu::GetMine();
+  std::atomic<size_t> count(0);
   if (!args->tests.spawn)  return;
   MY_PRINT("_UBENCH_SPAWN_TEST_: Start\n");
 
+  EventManager::EventContext context;
   for (size_t i=0; i<n; i++) {
 #ifndef __EBBRT_BM__
     ebbrt::Cpu *cpu = ebbrt::Cpu::GetByIndex(i);
     ebbrt::Context *ctxt = cpu->get_context();
-    ebbrt::event_manager->Spawn([n]() {
+    ebbrt::event_manager->Spawn([n,&context,theCpu,&count]() {
       MY_PRINT("HELLO: spawned: %zd %zd: %s:%d\n", size_t(ebbrt::Cpu::GetMine()), 
 	     size_t(*ebbrt::active_context),
 	     __FILE__, __LINE__);
@@ -281,19 +280,31 @@ spawn_test(struct Arguments *args)
       MY_PRINT("GOODBYE: spawned: %zd %zd: %s:%d\n", size_t(ebbrt::Cpu::GetMine()), 
 	     size_t(*ebbrt::active_context),
 	     __FILE__, __LINE__);
-      scnt++;
-      if (scnt==n)   MY_PRINT("_UBENCH_SPAWN_TEST_: END\n");
+      bar.Wait();
+      count++;
+      while (count < n);
+      if (ebbrt::Cpu::GetMine()==theCpu) {
+	ebbrt::event_manager->ActivateContext(std::move(context));
+      }
       }, ctxt);
 #else
-    ebbrt::event_manager->SpawnRemote([n]() {
+    ebbrt::event_manager->SpawnRemote([n,&context,theCpu,&count]() {
       MY_PRINT("HELLO: spawned: %d\n", size_t(ebbrt::Cpu::GetMine()));
       bar.Wait();
       MY_PRINT("GOODBYE: spawned:%d\n", size_t(ebbrt::Cpu::GetMine()));
-      scnt++;
-      if (scnt==n)   MY_PRINT("_UBENCH_SPAWN_TEST_: END\n");
+      bar.Wait();
+      count++;
+      while (count < n);
+      if (ebbrt::Cpu::GetMine()==theCpu) {
+	ebbrt::event_manager->ActivateContext(std::move(context));
+      }
       }, i);
 #endif
   }
+      ebbrt::event_manager->SaveContext(context);
+      MY_PRINT("Spawned: %d  Finished: %d\n", (int)n, (int)count);
+      assert(n==count);
+      MY_PRINT("_UBENCH_SPAWN_TEST_: END\n");
 }
 
 int 
@@ -336,7 +347,7 @@ process_args(int argc, char **argv, struct Arguments *args)
 	args->tests.env = 1;
 	break;
       case 'F':
-	args->tests.filein = 1;
+	args->tests.filein = optarg;
 	break;
       case 'I':
 	args->tests.standardin = 1;
@@ -357,18 +368,88 @@ process_args(int argc, char **argv, struct Arguments *args)
 	args->tests.spawn = 1;
 	break;
       case '?':
-	if (isprint (optopt)) {
+	if (optopt == 'F') {
+	  MY_PRINT("ERROR: -F requires file path to be specified.\n");
+	} else if (isprint (optopt)) {
 	  MY_PRINT("Unknown option `-%c'.\n", optopt);
 	} else {
 	  MY_PRINT("Unknown option character `\\x%x'.\n",
 			optopt);
 	}
-	return 1;
+	return 0;
       default:
 	return -1;
       }
   }  
-  return 0;
+  return 1;
+}
+
+void 
+standardin_test(struct Arguments *args)
+{
+  if (!args->tests.standardin)  return;
+  MY_PRINT("_UBENCH_STDIN_TEST_: Start\n");
+
+  ebbrt::EventManager::EventContext context;
+
+  MY_PRINT("Enter lines of characters ('.' to terminte):\n");
+
+  UNIX::sin->async_read_start
+    ([&context]
+     (std::unique_ptr<ebbrt::IOBuf> buf,size_t avail) {
+      if (!buf) {
+	assert(avail==0);
+	MY_PRINT("Stream EOF\n");
+	UNIX::sin->async_read_stop();
+	ebbrt::event_manager->ActivateContext(std::move(context));
+	return; 
+      }
+      for (auto& b : *buf) {
+	if (b.Length()>0) {
+	  size_t n = ebbrt::console::Write((const char *)b.Data(), b.Length()); 
+	  if (n<=0) throw std::runtime_error("write to stdout failed");
+	  if (!UNIX::sin->isFile() && b.Data()[0] == '.') {
+	    MY_PRINT("End of Data: .\n");
+	    UNIX::sin->async_read_stop();
+	    ebbrt::event_manager->ActivateContext(std::move(context));
+	    break;
+	  }
+	}
+      }
+    });
+  ebbrt::event_manager->SaveContext(context);
+  MY_PRINT("_UBENCH_STDIN_TEST_: End\n");
+}
+
+void 
+filein_test(struct Arguments *args)
+{
+  if (!args->tests.filein) return;
+  MY_PRINT("_UBENCH_FILEIN_TEST_: Start\n");
+
+  ebbrt::EventManager::EventContext context;
+
+  MY_PRINT("open and dump %s as a  stream", args->tests.filein); 
+  auto fistream = UNIX::root_fs->openInputStream(args->tests.filein);
+  fistream.Then([&context](ebbrt::Future<ebbrt::EbbRef<UNIX::InputStream>> fis) {
+      ebbrt::EbbRef<UNIX::InputStream> is = fis.Get();		  
+      is->async_read_start([&context,is](std::unique_ptr<ebbrt::IOBuf> buf,size_t avail) {
+	  if (!buf) {
+	    assert(avail==0);
+	    MY_PRINT("Stream EOF\n"); 
+	    is->async_read_stop();
+	    ebbrt::event_manager->ActivateContext(std::move(context));
+	    return; 
+	  }
+	  for (auto &b: *buf)  {
+	    size_t n = ebbrt::console::Write((const char *)b.Data(), b.Length()); 
+	    if (n<=0) throw std::runtime_error("write to stdout failed");
+	  }
+	});
+    }); 
+
+  ebbrt::event_manager->SaveContext(context);
+  MY_PRINT("_UBENCH_FILEIN_TEST_: END\n");
 }
 
 
@@ -382,36 +463,46 @@ void AppMain()
   UNIX::Init(margs.argc, (const char **)margs.argv);
 #endif
 
-  process_args(UNIX::cmd_line_args->argc(), UNIX::cmd_line_args->data(), &args);
-
-  cmdline_test(&args);
-  env_test(&args);
-
-#ifdef __EBBRT_BM__
-  bootimgargs_test(&args);
-  stdin_test(&args);
-  filein_test(&args);
-#endif
-
-#ifdef _UBENCH_BENCHMARKS_
-  MY_PRINT("_UBENCH_BENCHMARKS_: Start\n");
-  cpp_test(&args);
-  ebb_test(&args);
-  event_test(&args);
-  malloc_test(&args);
-  spawn_test(&args);
-  MY_PRINT("_UBENCH_BENCHMARKS_: End\n");
-#endif
+  if (!process_args(UNIX::cmd_line_args->argc(),
+		    UNIX::cmd_line_args->data(), &args)) {
+    MY_PRINT("ERROR in processing arguments\n");
+    goto DONE;
+  }
 
 #ifndef __EBBRT_BM__
-  //  frontendio_test();
   if (args.backend)  {
     auto bindir = 
       boost::filesystem::system_complete(UNIX::cmd_line_args->argv(0)).parent_path() /
       "bm/ubench.elf32";
     ebbrt::node_allocator->AllocateNode(bindir.string());
-  }
+    return;
+  } 
 #endif
 
+  MY_PRINT("_UBENCH_BENCHMARKS_: Start\n");  
+  cmdline_test(&args);
+  env_test(&args);
+  standardin_test(&args);
+  filein_test(&args);
+
+#ifdef __EBBRT_BM__
+  bootimgargs_test(&args);
+#endif
+
+  cpp_test(&args);
+  ebb_test(&args);
+  event_test(&args);
+  malloc_test(&args);
+  spawn_test(&args);
+
+  MY_PRINT("_UBENCH_BENCHMARKS_: End\n");
+
+ DONE:
+#ifndef __EBBRT_BM__
+  ebbrt::Cpu::Exit(0);
+#else 
+  UNIX::root_fs->processExit(1);
+#endif
+  
   return;
 }

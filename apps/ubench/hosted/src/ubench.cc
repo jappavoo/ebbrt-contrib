@@ -8,6 +8,7 @@
 #include <string.h>
 #include <assert.h>
 #include <pthread.h>
+#include <signal.h>
 
 #include <array>
 
@@ -31,8 +32,8 @@ void Main(void);
 namespace ebbrt {
   // static memebers
   std::array<ExplicitlyConstructed<ebbrt::Cpu>, ebbrt::Cpu::kMaxCpus> cpus;
-  int Cpu::numCpus=0;
-
+  int Cpu::numCpus_=0;
+  std::atomic<int> Cpu::shutdown_;
   Runtime  Cpu::rt_;
   thread_local ebbrt::Cpu* ebbrt::Cpu::my_cpu_tls_;
   
@@ -45,7 +46,7 @@ namespace ebbrt {
   ebbrt::Cpu * Cpu::Create(size_t index) 
   {
     cpus[index].construct(index);
-    numCpus++;
+    numCpus_++;
     return (ebbrt::Cpu *)&cpus[index];
   }
   
@@ -63,6 +64,15 @@ namespace ebbrt {
     init_lock_.lock();
     auto cpu = Create(index);
     cpu->Init();
+    if (size_t(*cpu) == 0) {
+      // ensure clean quit on ctrl-c
+      static boost::asio::signal_set signals(cpu->ctxt_.io_service_,
+					     SIGINT);
+      signals.async_wait([](const boost::system::error_code& ec,
+                        int signal_number) { 
+			   Shutdown();
+		     }); 
+    }
     __sync_fetch_and_add(&created_,1);
     init_lock_.unlock();
 
@@ -94,9 +104,7 @@ namespace ebbrt {
 	  
     // this thread should now infinitely run the event loop
     boost::asio::io_service::work work(cpu->ctxt_.io_service_);
-//    while (1)   
-   cpu->ctxt_.Run();
-    assert(0);
+    cpu->ctxt_.Run();
   }
   
   pthread_t Cpu::EarlyInit(void) 
@@ -106,6 +114,8 @@ namespace ebbrt {
     pthread_attr_t attr;
     pthread_t rc=0;
     int n = GetPhysCpus();
+
+    shutdown_.store(0);
 
     pthread_attr_init(&attr);
   
@@ -130,51 +140,36 @@ namespace ebbrt {
   }
 
   ebbrt::Cpu* Cpu::GetByIndex(size_t index) {
-    if (index > numCpus-1) {
+    if (index > numCpus_-1) {
       return nullptr;
     }
     return (ebbrt::Cpu *)&(cpus[index]);
   }
 
-  size_t Cpu::Count() { return numCpus; }
+  size_t Cpu::Count() { return numCpus_; }
   
+  void Cpu::Shutdown(void) {
+    if (numCpus_>0) {
+      // FIXME: should we not be doing this across all cpus?
+      //        doing so segfaults now
+      {
+	int zero=0;
+	if (!shutdown_.compare_exchange_strong(zero,1)) return;
+      }
+      for (size_t i=0;i<1;i++) {
+	printf("stopping cpu %zd\n", i);
+	GetByIndex(i)->ctxt_.io_service_.stop();
+      }
+    }
+  }
+  void Cpu::Exit(int val) {
+    Shutdown();
+    exit(val);
+  }
 }  // namespace ebbrt
 
-#ifdef FRONTENDIO_TEST
-void 
-frontendio_test()
-{
-  printf("Enter lines of characters ('.' to terminte):\n");
-  UNIX::sin->async_read_start([bindir](std::unique_ptr<ebbrt::IOBuf> buf,size_t avail) {
-	if (buf->Data()==NULL) {  printf("Stream EOF\n"); return; }
-	do {
-	  size_t n = write(STDOUT_FILENO, buf->Data(), buf->Length()); 
-	  if (n<=0) throw std::runtime_error("write to stdout failed");
-	  if (buf->Data()[0] == '.') {
-	    UNIX::sin->async_read_stop();
-	    printf("open and dump /etc/passwd a stream"); 
-	    auto fistream = UNIX::root_fs->openInputStream("/etc/passwd");
-	    fistream.Then([bindir](ebbrt::Future<ebbrt::EbbRef<UNIX::InputStream>> fis) {
-		
-		ebbrt::EbbRef<UNIX::InputStream> is = fis.Get();		  
-		is->async_read_start([](std::unique_ptr<ebbrt::IOBuf> buf,size_t avail) {
-		    if (buf->Data() == NULL) { printf("Stream EOF\n"); return; }
-		    do {
-		      size_t n = write(STDOUT_FILENO, buf->Data(), buf->Length()); 
-		      if (n<=0) throw std::runtime_error("write to stdout failed");
-		    } while(buf->Pop()!=nullptr);
-		  });
-		ebbrt::node_allocator->AllocateNode(bindir.string());
-	      });
-	    break;
-	  }
-	} while(buf->Pop()!=nullptr);
-    });
-}
-#endif
 
 struct MainArgs margs;
-
 void
 Main(void)
 {
@@ -199,6 +194,7 @@ main(int argc, char **argv)
 
   pthread_join(tid, &status);
 
-  printf("YIKES tid=%zx exited\n!!!", tid);
+  // This is redundant I think but I think it is also likely safe
+  ebbrt::Cpu::Exit(0);
   return 0;
 }

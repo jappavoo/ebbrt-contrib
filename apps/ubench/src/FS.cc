@@ -3,10 +3,15 @@
 #include <ebbrt/EbbRef.h>
 #include <ebbrt/LocalIdMap.h>
 #include <ebbrt/GlobalIdMap.h>
+#include <ebbrt/StaticIOBuf.h>
+#include <ebbrt/UniqueIOBuf.h>
 
 #include <ebbrt/Debug.h>
 
 #include "Unix.h"
+#ifndef __EBBRT_BM__
+#include "Cpu.h"
+#endif
 
 EBBRT_PUBLISH_TYPE(UNIX, FS);
 
@@ -52,6 +57,23 @@ UNIX::FS::FS(Root *root) : ebbrt::Messagable<UNIX::FS>(root->myId()),
 #endif
 }
 
+void UNIX::FS::Root::process_exit(int val)
+{
+#ifndef __EBBRT_BM__
+    ebbrt::Cpu::Exit(val);
+    return;
+#else
+    process_exit_msg_.val = val;
+    auto msg_buf =  std::unique_ptr<ebbrt::StaticIOBuf>
+      (new  ebbrt::StaticIOBuf((const uint8_t *)&process_exit_msg_,
+			       sizeof(process_exit_msg_)));
+    ebbrt::kprintf("sending exit to %d %x\n",
+		   ebbrt::Messenger::NetworkId(ebbrt::runtime::Frontend()) == UNIX::fe,
+		   ebbrt::runtime::Frontend());
+    theRep_->SendMessage(UNIX::fe, std::move(msg_buf));
+#endif
+}
+
 ebbrt::Future<ebbrt::EbbRef<UNIX::InputStream>>
 UNIX::FS::Root::open_stream(std::string str)
 {
@@ -59,23 +81,19 @@ UNIX::FS::Root::open_stream(std::string str)
   ebbrt::kprintf("21:%s\n", __PRETTY_FUNCTION__);
 #endif
 
-  if (UNIX::fe == ebbrt::messenger->LocalNetworkId()) {
+#ifndef __EBBRT_BM__
     throw std::runtime_error("FIXME: return a failed future");
-  } else {
+#else
     if (p_!=NULL) throw std::runtime_error("YIKES: FIXME");
     p_ = new ebbrt::Promise<ebbrt::EbbRef<InputStream>>;
-    std::unique_ptr<IOBuf> msg_buf =  
-      IOBuf::WrapBuffer((void*)&open_stream_msg_,
-			sizeof(open_stream_msg_));
+    auto msg_buf =  std::unique_ptr<ebbrt::StaticIOBuf>
+      (new  ebbrt::StaticIOBuf((const uint8_t *)&open_stream_msg_,
+			       sizeof(open_stream_msg_)));
     //strp = new std::string(std::move(str));
     auto data = str.data();
     auto len = str.length();
-    std::unique_ptr<IOBuf> path = 
-      IOBuf::TakeOwnership((void *)data, len, 
-			   std::bind([](std::string s, void*) { 
-			       // destroys s 
-			     }, std::move(str), std::placeholders::_1)
-			   );
+    auto path =  std::unique_ptr<ebbrt::StaticIOBuf>
+      (new  ebbrt::StaticIOBuf((const uint8_t *)data,len));
     msg_buf->AppendChain(std::move(path));
 
 
@@ -97,7 +115,7 @@ UNIX::FS::Root::open_stream(std::string str)
 
     theRep_->SendMessage(UNIX::fe, std::move(msg_buf));
     return p_->GetFuture();
-  }
+#endif
 }
 
 void UNIX::FS::Root::process_message(NetId nid, 
@@ -122,9 +140,9 @@ void UNIX::FS::Root::process_message(NetId nid,
       auto fis = theRep_->openInputStream(std::string((const char *)buf->Data(),buf->Length()));
       fis.Then([this,nid](ebbrt::Future<ebbrt::EbbRef<UNIX::InputStream>> f) {
 	  stream_id_msg_.id = f.Get();
-	  std::unique_ptr<IOBuf> msg_buf =  
-	    IOBuf::WrapBuffer((void*)&stream_id_msg_,
-			      sizeof(stream_id_msg_));
+	  auto msg_buf =  std::unique_ptr<ebbrt::StaticIOBuf> 
+	    (new ebbrt::StaticIOBuf((const uint8_t *)&stream_id_msg_,
+				    sizeof(stream_id_msg_)));
 	  theRep_->SendMessage(nid,std::move(msg_buf));
 	});
     }
@@ -139,6 +157,16 @@ void UNIX::FS::Root::process_message(NetId nid,
 	p_ = NULL;
       }
       break;
+  case kPROCESS_EXIT:
+    {
+      ProcessExitMsg *m = (ProcessExitMsg *)msg;
+      printf("%s: kPROCESS_EXIT: Recived: %d %d\n",
+	     __PRETTY_FUNCTION__, m->type, m->val);
+#ifndef __EBBRT_BM__
+      ebbrt::Cpu::Exit(m->val);
+#endif
+    }
+    break;
   default:
     printf("%s: ERROR: Received: %d\n", 
 	   __PRETTY_FUNCTION__, msg->type);
@@ -159,6 +187,7 @@ UNIX::FS::Root::Root(ebbrt::EbbId id) : myId_(id), theRep_(NULL), p_(NULL) {
 
   open_stream_msg_.type = kOPEN_STREAM;
   stream_id_msg_.type = kSTREAM_ID;
+  process_exit_msg_.type = kPROCESS_EXIT;
   data_ = ebbrt::global_id_map->Get(id).Share();
 }
 
@@ -276,5 +305,15 @@ UNIX::FS::openInputStream(std::string path)
 }
 
 #endif
+
+void
+UNIX::FS::processExit(int val)
+{
+#ifdef __EBBRT_BM__
+  ebbrt::kprintf("2:%s\n", __PRETTY_FUNCTION__);
+#endif
+  return myRoot_->process_exit(val);
+}
+
 
 void UNIX::FS::destroy() { ebbrt::kabort(); }
