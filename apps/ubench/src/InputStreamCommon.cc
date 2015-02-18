@@ -51,13 +51,16 @@ namespace UNIX {
   void InputStream::Root::process_message(NetId nid, 
 					  std::unique_ptr<ebbrt::IOBuf>&& buf) 
   {
-    Root::Message *msg = (Root::Message *)buf->Data();
-    switch (msg->type) {
+    auto dp = buf->GetDataPointer();
+    // msg is valid as long as dp is alive
+    const Root::Message& msg = dp.Get<Root::Message>();
+    switch (msg.type) {
     case kSTREAM_START:
       {
-	StreamStartMsg *m = (StreamStartMsg *)msg;
+	auto dp = buf->GetDataPointer();
+	const StreamStartMsg &m = dp.Get<StreamStartMsg>();
 	printf("%s: kSTREAM_START: Received: %d\n",
-	       __PRETTY_FUNCTION__, m->type);
+	       __PRETTY_FUNCTION__, m.type);
 	theRep_->async_read_start
 	  (
 	   [this,nid]
@@ -77,14 +80,15 @@ namespace UNIX {
       break;
     case kSTREAM_DATA:
       {
-	StreamDataMsg *m = (StreamDataMsg *)msg;
+	auto dp = buf->GetDataPointer();
+	const StreamDataMsg &m = dp.Get<StreamDataMsg>();
 	buf->AdvanceChain(sizeof(StreamDataMsg));
 	size_t len = buf->ComputeChainDataLength();
-	printf("\n<-len:%ld avail:%ld\n", len, m->avail);
+	printf("\n<-len:%ld avail:%ld\n", len, m.avail);
 	if (len == 0) {
 	  theRep_->consumer_(nullptr,0);
 	} else {
-	  theRep_->consumer_(std::move(buf), m->avail);
+	  theRep_->consumer_(std::move(buf), m.avail);
 	}
       }
       break;
@@ -96,7 +100,7 @@ namespace UNIX {
 
     default:
 	printf("%s: ERROR: Received: %d\n", 
-	       __PRETTY_FUNCTION__, msg->type);
+	       __PRETTY_FUNCTION__, msg.type);
     }
   }
 
