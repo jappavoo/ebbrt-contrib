@@ -53,11 +53,10 @@ namespace UNIX {
   {
     auto dp = buf->GetDataPointer();
     // msg is valid as long as dp is alive
-    const Root::Message& msg = dp.Get<Root::Message>();
+    const Root::Message& msg = dp.GetNoAdvance<Root::Message>();
     switch (msg.type) {
     case kSTREAM_START:
       {
-	auto dp = buf->GetDataPointer();
 	const StreamStartMsg &m = dp.Get<StreamStartMsg>();
 	printf("%s: kSTREAM_START: Received: %d\n",
 	       __PRETTY_FUNCTION__, m.type);
@@ -80,7 +79,6 @@ namespace UNIX {
       break;
     case kSTREAM_DATA:
       {
-	auto dp = buf->GetDataPointer();
 	const StreamDataMsg &m = dp.Get<StreamDataMsg>();
 	buf->AdvanceChain(sizeof(StreamDataMsg));
 	size_t len = buf->ComputeChainDataLength();
