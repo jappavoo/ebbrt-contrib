@@ -136,60 +136,58 @@ namespace UNIX {
   void InputStream::async_read_some()   {
     if (doRead_==false) return;
     if (sd_) {
-      sd_->async_read_some(
-			   boost::asio::buffer(buffer_,kBufferSize),  
-			   ebbrtEM::WrapHandler([this]
-						(
-						 const boostEC& ec,
-						 std::size_t size
-						 ) 
-						{
-						  size_t avail;
-						  if (ec) {
-						    printf("ERROR: on Stream\n"); 
-						    consumer_(nullptr,0);
-						    return;
-						  }
-						  {
-						    boostEC cec;
-						    sd_->io_control(asioAvail_,cec);
-						    if (cec) {printf("ERROR: on readable"); return;}
-						    avail = asioAvail_.get();
-						  }
-						  std::unique_ptr<IOBuf> iobuf = 
-						    IOBuf::Create<IOBuf>((const uint8_t *)buffer_, 
-									 size, 
-									 [this,size](){
-									   // printf("FREE %p\n",p);
-									   count_ += size;
-									   if (doRead_==true) async_read_some(); 
-									 });
-						  consumer_(std::move(iobuf),avail);
-						}
-						)
-			 );
+      sd_->async_read_some
+	(
+	 boost::asio::buffer(buffer_,kBufferSize),  
+	 ebbrtEM::WrapHandler([this]
+			      (const boostEC& ec, std::size_t size) {
+				size_t avail;
+				if (ec) {
+				  printf("ERROR: on Stream\n"); 
+				  consumer_(nullptr,0);
+				  return;
+				}
+				if (size) { // only consume non-zero data
+				  {
+				    boostEC cec;
+				    sd_->io_control(asioAvail_,cec);
+				    if (cec) {printf("ERROR: on readable"); return;}
+				    avail = asioAvail_.get();
+				    // printf("\navail=%zd size=%zd\n",avail,size);
+				  }
+				  std::unique_ptr<IOBuf> iobuf = IOBuf::Create<IOBuf>
+				    ((const uint8_t *)buffer_, size, 
+				     [this,size]() {
+				      count_ += size;
+				      if (doRead_==true) async_read_some(); 
+				    });
+				  consumer_(std::move(iobuf),avail);
+				}
+			      }
+			      )
+	 );
     } else {
       if (count_ < len_) {
-	ebbrt::event_manager->Spawn(
-				    [this]() { 
-				      size_t n = read(fd_, buffer_, kBufferSize);
-				      if (n<0) throw std::runtime_error("read of regular file failed");
-				      std::unique_ptr<IOBuf> iobuf = IOBuf::Create<IOBuf>
-					(
-					 (const uint8_t *)buffer_, n, [this,n](){
-					   // printf("free %p\n",p);
-					   count_ += n;
-					   if (count_ == len_) {
-					     printf("\n %s:%d * CLOSE STREAM LOGIC HERE *\n",
-						    __PRETTY_FUNCTION__, __LINE__);
-					     consumer_(nullptr,0);
-					     return;
-					   } else {
-					     if (doRead_==true) async_read_some(); 
-					   }
-					 });
-				      consumer_(std::move(iobuf),len_-(count_+n)); 
-				    });
+	ebbrt::event_manager->Spawn
+	  (
+	   [this]() { 
+	     size_t n = read(fd_, buffer_, kBufferSize);
+	     if (n<0) throw std::runtime_error("read of regular file failed");
+	     std::unique_ptr<IOBuf> iobuf = IOBuf::Create<IOBuf>
+	       (
+		(const uint8_t *)buffer_, n, [this,n](){
+		  count_ += n;
+		  if (count_ == len_) {
+		    printf("\n %s:%d * CLOSE STREAM LOGIC HERE *\n",
+			   __PRETTY_FUNCTION__, __LINE__);
+		    consumer_(nullptr,0);
+		    return;
+		  } else {
+		    if (doRead_==true) async_read_some(); 
+		  }
+		});
+	     if (n) consumer_(std::move(iobuf),len_-(count_+n)); 
+	   });
       }
     }
   }

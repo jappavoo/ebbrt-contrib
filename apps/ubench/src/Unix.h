@@ -127,7 +127,7 @@ namespace UNIX {
       void process_message(ebbrt::Messenger::NetworkId, 
 			   std::unique_ptr<ebbrt::IOBuf>&&);
     }; 
-    static const size_t kBufferSize = 1024;
+    static const size_t kBufferSize = 4096;
   private:
     friend Root;
     Root *myRoot_;

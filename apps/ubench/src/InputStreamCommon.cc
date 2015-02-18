@@ -19,7 +19,7 @@
 EBBRT_PUBLISH_TYPE(UNIX, InputStream);
 
 typedef ebbrt::Messenger::NetworkId NetId;
-
+typedef ebbrt::StaticIOBuf IOBuf;
 #ifdef __EBBRT_BM__
 #define printf ebbrt::kprintf
 #endif
@@ -31,10 +31,9 @@ namespace UNIX {
 #ifndef __EBBRT_BM__
     return;
 #else
-      auto msg_buf = std::unique_ptr<ebbrt::StaticIOBuf>
-	(new ebbrt::StaticIOBuf((const uint8_t *)&stream_start_msg_,
-				(size_t)sizeof(stream_start_msg_)));
-      theRep_->SendMessage(UNIX::fe, std::move(msg_buf));
+    std::unique_ptr<IOBuf> msg_buf = IOBuf::Create<IOBuf>
+      ((const uint8_t *)&stream_start_msg_,(size_t)sizeof(stream_start_msg_));
+    theRep_->SendMessage(UNIX::fe, std::move(msg_buf));
 #endif
   }
 
@@ -43,16 +42,15 @@ namespace UNIX {
 #ifndef __EBBRT_BM__
     return;
 #else
-      auto msg_buf =  
-	std::unique_ptr<ebbrt::StaticIOBuf>
-	(new ebbrt::StaticIOBuf((const uint8_t *)&stream_stop_msg_,
-				(size_t)sizeof(stream_stop_msg_)));
-      theRep_->SendMessage(UNIX::fe, std::move(msg_buf));
+    std::unique_ptr<IOBuf> msg_buf = IOBuf::Create<IOBuf>
+      ((const uint8_t *)&stream_stop_msg_,(size_t)sizeof(stream_stop_msg_));
+    theRep_->SendMessage(UNIX::fe, std::move(msg_buf));
 #endif
   }
 
   void InputStream::Root::process_message(NetId nid, 
-					  std::unique_ptr<ebbrt::IOBuf>&& buf) {
+					  std::unique_ptr<ebbrt::IOBuf>&& buf) 
+  {
     Root::Message *msg = (Root::Message *)buf->Data();
     switch (msg->type) {
     case kSTREAM_START:
@@ -60,36 +58,31 @@ namespace UNIX {
 	StreamStartMsg *m = (StreamStartMsg *)msg;
 	printf("%s: kSTREAM_START: Received: %d\n",
 	       __PRETTY_FUNCTION__, m->type);
-	theRep_->async_read_start(
-				  [this,nid]
-				  (std::unique_ptr<ebbrt::IOBuf> buf,size_t avail) 
-				  {
-				    stream_data_msg_.avail = avail;
-				    auto msg_buf = std::unique_ptr<ebbrt::StaticIOBuf>
-				      (new ebbrt::StaticIOBuf
-				       ((const uint8_t *)&stream_data_msg_,
-					(size_t)sizeof(stream_data_msg_)));
-				    //printf("type:%d avail:%ld\n", 
-				    //  stream_data_msg_.type,
-				    //  stream_data_msg_.avail);
-				    if (buf->Data()!=NULL) msg_buf->AppendChain(std::move(buf));
-				    else   printf("\nPASSING EOF\n");
-				    theRep_->SendMessage(nid, std::move(msg_buf));
-				  });
+	theRep_->async_read_start
+	  (
+	   [this,nid]
+	   (std::unique_ptr<ebbrt::IOBuf> buf,size_t avail) 
+	   {
+	     stream_data_msg_.avail = avail;
+	     printf("-> len:%zd avail:%zd\n",
+		    buf->ComputeChainDataLength(), avail);
+	     std::unique_ptr<IOBuf> msg_buf = IOBuf::Create<IOBuf>
+	       ((const uint8_t *)&stream_data_msg_,(size_t)sizeof(stream_data_msg_));
+	     if (buf) msg_buf->AppendChain(std::move(buf));
+	     else   printf("\nPASSING EOF\n");
+	     theRep_->SendMessage(nid, std::move(msg_buf));
+	   }
+	  );
       }
       break;
     case kSTREAM_DATA:
       {
 	StreamDataMsg *m = (StreamDataMsg *)msg;
-	//	printf("%s: kSTREAM_DATA: Received: %d: avail=%ld \n",
-	//       __PRETTY_FUNCTION__, m->type, m->avail);
-	buf->Advance(sizeof(StreamDataMsg));
-	printf("\nbuf->Length()=%ld\n", buf->Length());
-	if (buf->Length() == 0) {
-	  theRep_->consumer_(
-			     std::unique_ptr<ebbrt::StaticIOBuf>
-			     (new ebbrt::StaticIOBuf
-			      ((const uint8_t *)NULL,(size_t)0)),0);
+	buf->AdvanceChain(sizeof(StreamDataMsg));
+	size_t len = buf->ComputeChainDataLength();
+	printf("\n<-len:%ld avail:%ld\n", len, m->avail);
+	if (len == 0) {
+	  theRep_->consumer_(nullptr,0);
 	} else {
 	  theRep_->consumer_(std::move(buf), m->avail);
 	}
@@ -97,9 +90,6 @@ namespace UNIX {
       break;
     case kSTREAM_STOP:
       {
-	// StreamStopMsg *m = (StreamStopMsg *)msg;
-	// printf("%s: kSTREAM_STOP: Received: %d\n", 
-	//         __PRETTY_FUNCTION__, m->type);
 	theRep_->async_read_stop();
       }
       break;
