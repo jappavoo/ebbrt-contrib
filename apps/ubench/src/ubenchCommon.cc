@@ -98,8 +98,17 @@ public:
   int  val() { return _val; }
 };
 
-Counter GlobalCtr;
+class VirtualCounter {
+  int _val;
+public:
+  VirtualCounter() : _val(0) {}
+  virtual void inc() { _val++; }
+  virtual void dec() { _val--; }
+  virtual int val() { return _val; }
+};
 
+Counter GlobalCtr;
+VirtualCounter VirtualGlobalCtr;
 
 
 #define CtrWork(CTR,CNT)			\
@@ -178,6 +187,12 @@ GlobalCounterTest(int cnt)
 }
 
 void
+VirtualGlobalCounterTest(int cnt) 
+{
+  CtrWork(VirtualGlobalCtr,cnt)
+}
+
+void
 StackCounterTest(int cnt) 
 {
   Counter stackCtr;
@@ -200,6 +215,22 @@ HeapCounterTest(int cnt)
   CtrRefWork(heapCtr,cnt);
 }
 
+void
+VirtualHeapCounterTest(int cnt)
+{  
+  tp start, end;
+
+  start = now();
+  VirtualCounter *heapCtr = new VirtualCounter;
+  end = now();
+  assert(heapCtr!=NULL);
+
+  MY_PRINT("RES: %s: new VirtualCounter: %" PRId32 " %" PRIu64 "\n", 
+	   __PFUNC__,1, nsdiff(start,end));
+
+  CtrRefWork(heapCtr,cnt);
+}
+
 void 
 cpp_test(struct Arguments *args)
 {
@@ -213,6 +244,8 @@ cpp_test(struct Arguments *args)
     GlobalCounterTest(acnt);
     StackCounterTest(acnt);
     HeapCounterTest(acnt);
+    VirtualGlobalCounterTest(acnt);
+    VirtualHeapCounterTest(acnt);
   }
   MY_PRINT("_UBENCH_CPP_TEST_: END\n");
 }

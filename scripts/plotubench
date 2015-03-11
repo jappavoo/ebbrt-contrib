@@ -30,11 +30,11 @@ do
     do
 	l1=${f%%:*}
 	f=${f#*:}
-	data=$(grep RES  $f | grep $re | sed 's/^.* //g' |  TERSE=1 mmavg)
+	data=$(grep RES  $f | grep $re | sed 's/^.* //g' |  mmavg)
 	echo -n "$l1 $data "
 	echo "# $l1 $l2 " >> $exp.info
 	grep RES  $f | grep $re | sed 's/^/#/' >> $exp.info
-	grep RES  $f | grep $re | sed 's/^.* //g' |  mmavg | sed 's/^/#/' >>$exp.info
+	grep RES  $f | grep $re | sed 's/^.* //g' |  mmavg -v | sed 's/^/#/' >>$exp.info
     done
     echo 
 done > $exp.data 
