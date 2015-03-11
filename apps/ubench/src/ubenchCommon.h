@@ -1,7 +1,7 @@
 #ifndef __UBENCH_COMMON_H__
 #define __UBENCH_COMMON_H__
 
-#define ACTION_CNT 100000
+#define ACTION_CNT 1000000
 #define REPEAT_CNT 10
 
 struct Arguments {

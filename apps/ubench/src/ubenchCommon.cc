@@ -23,6 +23,8 @@
 
 #define MY_PRINT printf
 
+typedef std::chrono::high_resolution_clock myclock;
+
 #else
 
 // BAREMETAL
@@ -34,10 +36,13 @@
 #include <strings.h>
 #include <cctype>
 
+#include <ebbrt/Clock.h>
 #include <ebbrt/Debug.h>
 #include <ebbrt/Console.h>
 
 #define MY_PRINT ebbrt::kprintf
+
+typedef ebbrt::clock::Wall myclock;
 
 void  bootimgargs_test(struct Arguments *);
 #endif
@@ -47,10 +52,13 @@ void  bootimgargs_test(struct Arguments *);
 #include "Unix.h"
 #include "ubenchCommon.h"
 
-
 #define __FUNC__ __FUNCTION__
 #define __PFUNC__ __PRETTY_FUNCTION__
 
+typedef std::chrono::time_point<myclock> tp;
+tp now() { return myclock::now(); }
+
+#if 0
 inline uint64_t
 rdtsc(void) 
 {
@@ -69,6 +77,14 @@ rdpmctsc(void)
   __asm__ __volatile__ ("rdpmc" : "=a" (a), "=d" (d) : "c" (c));
 
   return ((uint64_t)a) | (((uint64_t)d)<<32);
+}
+#endif
+
+uint64_t
+nsdiff(tp start, tp end)
+{
+  return std::chrono::duration_cast<std::chrono::nanoseconds>
+  (end-start).count();
 }
 
 using namespace ebbrt;
@@ -89,69 +105,69 @@ Counter GlobalCtr;
 #define CtrWork(CTR,CNT)			\
   {						\
   int rc = 0;					\
-  uint64_t start, end;				\
+  tp start, end;				\
 						\
-  start = rdtsc();				\
+  start = now();				\
   for (int i=0; i<cnt; i++) {			\
     CTR.inc();					\
   }						\
-  end = rdtsc();				\
-  MY_PRINT("%s: " #CTR ".inc(): %"	\
+  end = now();				\
+  MY_PRINT("RES: %s: " #CTR ".inc(): %"	\
 		 PRId32 " %" PRIu64 "\n",  __PFUNC__,	\
-		 CNT, (end - start));		\
+	     CNT, nsdiff(start,end));				\
   							\
-  start = rdtsc();				\
+  start = now();				\
   for (int i=0; i<CNT; i++) {		\
     CTR.dec();			\
   }						\
-  end = rdtsc();				\
-  MY_PRINT("%s: " #CTR ".dec(): %"	\
+  end = now();				\
+  MY_PRINT("RES: %s: " #CTR ".dec(): %"	\
           PRId32 " %" PRIu64 "\n", __PFUNC__,	\
-	  CNT, (end - start));		\
+	     CNT, nsdiff(start,end));	\
 						\
-  start = rdtsc();				\
+  start = now();				\
   for (int i=0; i<CNT; i++) {		\
     rc += CTR.val();			\
   }						\
-  end = rdtsc();				\
+  end = now();				\
   assert(rc==0);				\
-  MY_PRINT("%s: " #CTR ".val(): %"	\
+  MY_PRINT("RES: %s: " #CTR ".val(): %"	\
 	  PRId32 " %" PRIu64 "\n", __PFUNC__,	\
-	  CNT, (end - start));		\
+	     CNT, nsdiff(start,end));	\
   }
 
 #define CtrRefWork(CTR,CNT)			\
   {						\
   int rc = 0;					\
-  uint64_t start, end;				\
+  tp start, end;				\
 						\
-  start = rdtsc();				\
+  start = now();				\
   for (int i=0; i<CNT; i++) {		\
     CTR->inc();			\
   }						\
-  end = rdtsc();				\
-  MY_PRINT("%s: " #CTR "->inc(): %"	\
+  end = now();				\
+  MY_PRINT("RES: %s: " #CTR "->inc(): %"	\
 		 PRId32 " %" PRIu64 "\n",  __PFUNC__,	\
-		 CNT, (end - start));		\
+	   CNT, nsdiff(start,end));			\
   							\
-  start = rdtsc();				\
+  start = now();				\
   for (int i=0; i<CNT; i++) {		\
     CTR->dec();			\
   }						\
-  end = rdtsc();				\
-  MY_PRINT("%s: " #CTR "->dec(): %"	\
+  end = now();				\
+  MY_PRINT("RES: %s: " #CTR "->dec(): %"	\
           PRId32 " %" PRIu64 "\n", __PFUNC__,	\
-	  CNT, (end - start));		\
+	   CNT, nsdiff(start,end));		\
 						\
-  start = rdtsc();				\
+  start = now();				\
   for (int i=0; i<CNT; i++) {		\
     rc += CTR->val();			\
   }						\
-  end = rdtsc();				\
+  end = now();				\
   assert(rc==0);				\
-  MY_PRINT("%s: " #CTR "->val(): %"	\
+  MY_PRINT("RES: %s: " #CTR "->val(): %"	\
 	  PRId32 " %" PRIu64 "\n", __PFUNC__,	\
-	  CNT, (end - start));		\
+	   CNT, nsdiff(start,end));	\
   }
 
 
@@ -170,16 +186,16 @@ StackCounterTest(int cnt)
 
 void
 HeapCounterTest(int cnt)
-{
-  uint64_t start, end;
+{  
+  tp start, end;
 
-  start = rdtsc();
+  start = now();
   Counter *heapCtr = new Counter;
-  end = rdtsc();
+  end = now();
   assert(heapCtr!=NULL);
 
-  MY_PRINT("%s: new Counter: %" PRId32 " %" PRIu64 "\n", 
-	  __PFUNC__,1, (end - start));
+  MY_PRINT("RES: %s: new Counter: %" PRId32 " %" PRIu64 "\n", 
+	   __PFUNC__,1, nsdiff(start,end));
 
   CtrRefWork(heapCtr,cnt);
 }
@@ -480,6 +496,7 @@ void AppMain()
 #endif
 
   MY_PRINT("_UBENCH_BENCHMARKS_: Start\n");  
+
   cmdline_test(&args);
   env_test(&args);
   standardin_test(&args);

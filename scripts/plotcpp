@@ -1,0 +1,6 @@
+#!/bin/bash
+#set -x
+# To use this you must run the ubench application and save its output to files
+# eg.  ubench -c > linux_native.out; ubench -B -c > ebbrt.out
+
+plotubench cpp 'ebbrt:ebbrt.out linux_native:native.out' 'globalinc:Global.* stack:Stack.* heap:Heap.*-.[idv] heapNew:Heap.*new' 
