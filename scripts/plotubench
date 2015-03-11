@@ -51,6 +51,7 @@ set xtics  norangelimit font ",8"
 set xtics   ()
 set title "$exp"
 set yrange [0<*:]
+set key top left
 plot for [i=2:10:7] '$exp.data' using i+3:i+1:i+2:xticlabels(1) t ""
 EOF
 
