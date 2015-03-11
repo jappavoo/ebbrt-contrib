@@ -19,6 +19,8 @@ if [[ -z $REGEXS ]];then
   REGEXS='data:^.*$'
 fi
 
+echo -n > $exp.info 
+
 for re in $REGEXS
 do 
     l2=${re%%:*}
@@ -30,9 +32,9 @@ do
 	f=${f#*:}
 	data=$(grep RES  $f | grep $re | sed 's/^.* //g' |  TERSE=1 mmavg)
 	echo -n "$l1 $data "
-#	echo "# $l1 $l2 "
-#	grep RES  $f | grep $re | sed 's/^/#/' 
-#	grep RES  $f | grep $re | sed 's/^.* //g' |  mmavg | sed 's/^/#/' 
+	echo "# $l1 $l2 " >> $exp.info
+	grep RES  $f | grep $re | sed 's/^/#/' >> $exp.info
+	grep RES  $f | grep $re | sed 's/^.* //g' |  mmavg | sed 's/^/#/' >>$exp.info
     done
     echo 
 done > $exp.data 
