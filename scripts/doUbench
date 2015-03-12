@@ -177,4 +177,4 @@ else
 fi
 
 echo "MAKING PLOTS"
-plotubench
+plotcpp
