@@ -1,8 +1,9 @@
 #ifndef __UBENCH_COMMON_H__
 #define __UBENCH_COMMON_H__
 
-#define ACTION_CNT 1000000
-#define REPEAT_CNT 10
+#define ACTION_CNT    1000000
+#define REPEAT_CNT    10
+#define PROCESSOR_CNT 1
 
 struct Arguments {
   struct {
@@ -15,10 +16,12 @@ struct Arguments {
     int cmdline;
     int env;
     int spawn;
+    int mp;
   } tests;
   int backend;
   int repeatCnt;
   int actionCnt;
+  int processorCnt;
 };
 
 int process_args(int, char **, struct Arguments *);

@@ -10,7 +10,7 @@ ebbrt_commoninc = ${EBBRT_SRCDIR}/common/src/include
 ifeq ($(strip ${EBBRT_BUILDTYPE}),Debug)
   OPTFLAGS ?= -O0 -g
 else ifeq ($(strip ${EBBRT_BUILDTYPE}),Release)
-  OPTFLAGS ?= -O4 -flto
+  OPTFLAGS ?= -O4 -flto -DNDEBUG -DBOOST_DISABLE_ASSERTS 
 else 
   $(error EBBRT_BUILDTYPE must be set to either Debug or Release)
 endif

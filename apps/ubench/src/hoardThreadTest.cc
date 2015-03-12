@@ -50,6 +50,7 @@ using namespace std::chrono;
 #include <stdlib.h>
 #ifdef __EBBRT_BM__
 #include <ebbrt/Cpu.h>
+#include <cassert>
 #define MY_PRINT ebbrt::kprintf
 #else
 #include <ebbrt/Runtime.h>

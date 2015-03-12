@@ -47,7 +47,10 @@ typedef ebbrt::clock::Wall myclock;
 void  bootimgargs_test(struct Arguments *);
 #endif
 
+#include <ebbrt/SharedEbb.h>
+#include <ebbrt/MulticoreEbb.h>
 #include <ebbrt/SpinBarrier.h>
+#include <ebbrt/CacheAligned.h>
  
 #include "Unix.h"
 #include "ubenchCommon.h"
@@ -55,30 +58,10 @@ void  bootimgargs_test(struct Arguments *);
 #define __FUNC__ __FUNCTION__
 #define __PFUNC__ __PRETTY_FUNCTION__
 
+using namespace ebbrt;
+
 typedef std::chrono::time_point<myclock> tp;
 tp now() { return myclock::now(); }
-
-#if 0
-inline uint64_t
-rdtsc(void) 
-{
-  uint32_t a,d;
-
-  __asm__ __volatile__("rdtsc" : "=a" (a), "=d" (d));
-  return ((uint64_t)a) | (((uint64_t)d) << 32);
-}
-
-inline uint64_t
-rdpmctsc(void)
-{
-  uint32_t a,d;
-  uint32_t c=0;
-
-  __asm__ __volatile__ ("rdpmc" : "=a" (a), "=d" (d) : "c" (c));
-
-  return ((uint64_t)a) | (((uint64_t)d)<<32);
-}
-#endif
 
 uint64_t
 nsdiff(tp start, tp end)
@@ -87,28 +70,186 @@ nsdiff(tp start, tp end)
   (end-start).count();
 }
 
-using namespace ebbrt;
+struct alignas(cache_size) Result {
+  uint64_t time;
+  char pad[ebbrt::cache_size - sizeof(uint64_t)];
+} MPResults[ebbrt::Cpu::kMaxCpus];
 
-class Counter {
+
+#ifndef __EBBRT_BM__
+ebbrt::Context * indexToCPU(size_t i) 
+{
+    return ebbrt::Cpu::GetByIndex(i)->get_context();
+}
+#else
+size_t indexToCPU(size_t i) {return i;}
+#endif
+
+void
+MPTest(const char *name, int cnt, size_t n,
+       ebbrt::MovableFunction<void(int)>work)
+{  
+  if (n<0) n=1; else if (n>ebbrt::Cpu::Count()) n=ebbrt::Cpu::Count();
+
+  static ebbrt::SpinBarrier bar(n);
+  size_t theCpu=ebbrt::Cpu::GetMine();
+  std::atomic<size_t> count(0);
+
+  MY_PRINT("%s: Start\n", name);
+
+  EventManager::EventContext context;
+  for (size_t i=0; i<n; i++) {
+    ebbrt::event_manager->SpawnRemote([i,n,&context,theCpu,&count,
+				       &work,cnt]() {
+      tp start, end;
+      bar.Wait();
+      start = now();
+      work(cnt);
+      end = now();
+      bar.Wait();
+      MPResults[i].time=nsdiff(start,end);
+      count++;
+      while (count < (size_t)n);
+      if (ebbrt::Cpu::GetMine()==theCpu) {
+	ebbrt::event_manager->ActivateContext(std::move(context));
+      }
+    }, indexToCPU(i));
+  }
+  ebbrt::event_manager->SaveContext(context);
+  for (size_t i=0; i<n; i++) {
+    MY_PRINT("RES: %s: n=%" PRIu64 " i=%" PRIu64 ": %" PRId32 " %" PRIu64 "\n", 
+	     name, n, i, cnt, MPResults[i].time);
+  }
+  assert(n==count);
+  MY_PRINT("%s: END\n", name);
+}
+
+class Ctr {
   int _val;
 public:
-  Counter() : _val(0) {}
+  Ctr() : _val(0) {}
   void inc() { _val++; }
   void dec() { _val--; }
   int  val() { return _val; }
 };
 
-class VirtualCounter {
+class VirtualCtr {
   int _val;
 public:
-  VirtualCounter() : _val(0) {}
+  VirtualCtr() : _val(0) {}
   virtual void inc() { _val++; }
   virtual void dec() { _val--; }
   virtual int val() { return _val; }
 };
 
-Counter GlobalCtr;
-VirtualCounter VirtualGlobalCtr;
+
+class MPSharedCtr {
+  std::atomic<int> _val;
+public:
+  MPSharedCtr() : _val(0) {}
+  void inc() { _val++; }
+  virtual void dec() { _val--; }
+  virtual int val() { return _val; }
+};
+
+class EbbCtr;
+typedef EbbRef<EbbCtr> EbbCtrRef ;
+
+class EbbCtr : public SharedEbb<EbbCtr> {
+  int _val;
+  EbbCtr() : _val(0) {}
+public:
+  void inc() { _val++; }
+  void dec() { _val--; }
+  int val() { return _val; }
+
+  static EbbCtrRef Create(EbbId id=ebb_allocator->Allocate()) {
+    return SharedEbb<EbbCtr>::Create(new EbbCtr, id);
+  }
+
+  static EbbCtrRef GlobalCtr() {
+    static EbbCtr theGlobalCtr;
+    static EbbId theId = ebb_allocator->Allocate();
+    static EbbCtrRef theRef = 
+      SharedEbb<EbbCtr>::Create(&theGlobalCtr, theId); 
+    return theRef;
+  }
+
+};
+
+class MPSharedEbbCtr;
+typedef EbbRef<MPSharedEbbCtr> MPSharedEbbCtrRef;
+
+class MPSharedEbbCtr : public SharedEbb<MPSharedEbbCtr> {
+  std::atomic<int> _val;
+  MPSharedEbbCtr() : _val(0) {}
+public:
+  void inc() { _val++; }
+  void dec() { _val--; }
+  int val() { return _val; }
+
+  static MPSharedEbbCtrRef Create(EbbId id=ebb_allocator->Allocate()) {
+    return SharedEbb<MPSharedEbbCtr>::Create(new MPSharedEbbCtr, id);
+  }
+
+  static MPSharedEbbCtrRef GlobalCtr() {
+    static MPSharedEbbCtr theGlobalCtr;
+    static EbbId theId = ebb_allocator->Allocate();
+    static MPSharedEbbCtrRef theRef = 
+      SharedEbb<MPSharedEbbCtr>::Create(&theGlobalCtr, theId); 
+    return theRef;
+  }
+};
+
+class MPMultiEbbCtr;
+typedef EbbRef<MPMultiEbbCtr> MPMultiEbbCtrRef;
+
+class MPMultiEbbCtrRoot {
+private:
+  friend class MPMultiEbbCtr;
+  EbbId _id;
+  MPMultiEbbCtrRoot(EbbId id) : _id(id) {}
+};
+
+class MPMultiEbbCtr : public MulticoreEbb<MPMultiEbbCtr, MPMultiEbbCtrRoot> {
+  typedef MPMultiEbbCtrRoot Root;
+  const Root &_root;
+  EbbId myId() { return _root._id; }
+
+  std::atomic<int> _val;
+  MPMultiEbbCtr(const Root &root) : _root(root), _val(0) {}
+  // give access to the constructor
+  friend class MulticoreEbb<MPMultiEbbCtr, MPMultiEbbCtrRoot>; 
+public:
+  void inc() { _val++; }
+  void dec() { _val--; }
+  int val()  {    
+    int sum=0;
+    LocalIdMap::ConstAccessor accessor; // serves as a lock on the rep map
+    auto found = local_id_map->Find(accessor, myId());
+    if (!found)
+        throw std::runtime_error("Failed to find root for MulticoreEbb");
+    auto pair = 
+      boost::any_cast<std::pair<Root *, 
+				boost::container::flat_map<size_t, 
+							   MPMultiEbbCtr *>>>
+      (&accessor->second);
+    const auto& rep_map = pair->second;
+    for (auto it = rep_map.begin(); it != rep_map.end() ; it++) {
+      auto rep = boost::any_cast<const MPMultiEbbCtr *>(it->second);
+      sum += rep->_val;
+    }
+    return sum;
+  };
+  
+  static MPMultiEbbCtrRef Create(EbbId id=ebb_allocator->Allocate()) {
+    return MulticoreEbb<MPMultiEbbCtr, void>::Create(new Root(id), id);
+  }
+};
+
+
+Ctr GlobalCtr;
+VirtualCtr VirtualGlobalCtr;
 
 
 #define CtrWork(CTR,CNT)			\
@@ -180,55 +321,179 @@ VirtualCounter VirtualGlobalCtr;
   }
 
 
+#define MPCtrRefWork(CTR,CNT)		\
+  {						\
+  int rc = 0;					\
+  for (int i=0; i<CNT; i++) {		\
+    CTR->inc();			\
+  }						\
+  for (int i=0; i<CNT; i++) {		\
+    CTR->dec();			\
+  }						\
+  for (int i=0; i<CNT; i++) {		\
+    rc += CTR->val();			\
+  }						\
+  }
+
+
 void
-GlobalCounterTest(int cnt) 
+GlobalCtrTest(int cnt) 
 {
   CtrWork(GlobalCtr,cnt)
 }
 
 void
-VirtualGlobalCounterTest(int cnt) 
+VirtualGlobalCtrTest(int cnt) 
 {
   CtrWork(VirtualGlobalCtr,cnt)
 }
 
 void
-StackCounterTest(int cnt) 
+StackCtrTest(int cnt) 
 {
-  Counter stackCtr;
+  Ctr stackCtr;
   CtrWork(stackCtr,cnt)
 }
 
 void
-HeapCounterTest(int cnt)
+HeapCtrTest(int cnt)
 {  
   tp start, end;
 
   start = now();
-  Counter *heapCtr = new Counter;
+  Ctr *heapCtr = new Ctr;
   end = now();
   assert(heapCtr!=NULL);
 
-  MY_PRINT("RES: %s: new Counter: %" PRId32 " %" PRIu64 "\n", 
+  MY_PRINT("RES: %s: new Ctr: %" PRId32 " %" PRIu64 "\n", 
 	   __PFUNC__,1, nsdiff(start,end));
 
   CtrRefWork(heapCtr,cnt);
 }
 
+
 void
-VirtualHeapCounterTest(int cnt)
+VirtualHeapCtrTest(int cnt)
 {  
   tp start, end;
 
   start = now();
-  VirtualCounter *heapCtr = new VirtualCounter;
+  VirtualCtr *virtHeapCtr = new VirtualCtr;
   end = now();
-  assert(heapCtr!=NULL);
+  assert(virtHeapCtr!=NULL);
 
-  MY_PRINT("RES: %s: new VirtualCounter: %" PRId32 " %" PRIu64 "\n", 
+  MY_PRINT("RES: %s: new VirtualCtr: %" PRId32 " %" PRIu64 "\n", 
 	   __PFUNC__,1, nsdiff(start,end));
 
-  CtrRefWork(heapCtr,cnt);
+  CtrRefWork(virtHeapCtr,cnt);
+}
+
+
+void
+MPSharedHeapCtrTest(int cnt, size_t n)
+{
+  tp start, end;
+
+  start = now();
+  MPSharedCtr *ctr = new MPSharedCtr;
+  end = now();
+  assert(ctr!=NULL);
+
+  MY_PRINT("RES: %s: new MPSharedHeapCtr: %" PRId32 " %" PRIu64 "\n", 
+	   __PFUNC__,1, nsdiff(start,end));
+
+  MPTest(__PFUNC__, cnt, n, [ctr](int cnt) {
+      MPCtrRefWork(ctr,cnt);
+    } );
+}
+
+void
+GlobalEbbCtrTest(int cnt)
+{
+  tp start, end;
+  EbbCtrRef globalEbbCtr;
+
+  start = now();
+  globalEbbCtr = EbbCtr::GlobalCtr();
+  end = now();
+
+  MY_PRINT("RES: %s: EbbCtr::GlobalEbbCtr() : %" PRId32 " %" PRIu64 "\n", 
+	   __PFUNC__,1, nsdiff(start,end));
+
+  CtrRefWork(globalEbbCtr,cnt);
+}
+
+void
+HeapEbbCtrTest(int cnt)
+{
+  tp start, end;
+  EbbCtrRef heapEbbCtr;
+
+  start = now();
+  heapEbbCtr = EbbCtr::Create();
+  end = now();
+
+  MY_PRINT("RES: %s: EbbCtr::Create() : %" PRId32 " %" PRIu64 "\n", 
+	   __PFUNC__,1, nsdiff(start,end));
+
+  CtrRefWork(heapEbbCtr,cnt);
+}
+
+
+void
+MPSharedHeapEbbCtrTest(int cnt, size_t n)
+{
+  tp start, end;
+  MPSharedEbbCtrRef ctr;
+
+  start = now();
+  ctr = MPSharedEbbCtr::Create();
+  end = now();
+
+  MY_PRINT("RES: %s: MPSharedEbbCtr::Create() : %" PRId32 " %" PRIu64 "\n", 
+	   __PFUNC__,1, nsdiff(start,end));
+
+  MPTest(__PFUNC__, cnt, n, [ctr](int cnt) {
+      MPCtrRefWork(ctr,cnt);
+    } );
+}
+
+
+void
+MPMultiHeapEbbCtrTest(int cnt, size_t n)
+{
+  tp start, end;
+  MPMultiEbbCtrRef ctr;
+
+  start = now();
+  ctr = MPMultiEbbCtr::Create();
+  end = now();
+
+  MY_PRINT("RES: %s: MPMultiEbbCtr::Create() : %" PRId32 " %" PRIu64 "\n", 
+	   __PFUNC__,1, nsdiff(start,end));
+
+  MPTest(__PFUNC__, cnt, n, [ctr](int cnt) {
+      MPCtrRefWork(ctr,cnt);
+    } );
+}
+
+void
+mp_test(struct Arguments *args)
+{
+  if (!args->tests.mp) return;
+  int rcnt = args->repeatCnt;
+  int acnt = args->actionCnt;
+  int n = args->processorCnt;
+
+  MY_PRINT("_UBENCH_MP_TEST_: START\n");
+  // Base line C++ method dispatch numbers 
+  for (int i=0; i<rcnt; i++) {
+    MPSharedHeapCtrTest(acnt,n);
+    MPSharedHeapEbbCtrTest(acnt,n);
+    MPMultiHeapEbbCtrTest(acnt, n);
+  }
+  MY_PRINT("_UBENCH_MP_TEST_: END\n");
+
 }
 
 void 
@@ -241,13 +506,30 @@ cpp_test(struct Arguments *args)
   MY_PRINT("_UBENCH_CPP_TEST_: START\n");
   // Base line C++ method dispatch numbers 
   for (int i=0; i<rcnt; i++) {
-    GlobalCounterTest(acnt);
-    StackCounterTest(acnt);
-    HeapCounterTest(acnt);
-    VirtualGlobalCounterTest(acnt);
-    VirtualHeapCounterTest(acnt);
+    GlobalCtrTest(acnt);
+    StackCtrTest(acnt);
+    HeapCtrTest(acnt);
+    VirtualGlobalCtrTest(acnt);
+    VirtualHeapCtrTest(acnt);
   }
   MY_PRINT("_UBENCH_CPP_TEST_: END\n");
+}
+
+void ebb_test(struct Arguments *args) 
+{
+  if (!args->tests.ebb) return;
+  int rcnt = args->repeatCnt;
+  int acnt = args->actionCnt;
+
+  MY_PRINT("_UBENCH_EBB_TEST_: START\n");
+    // Base line Ebb method dispatch numbers 
+  for (int i=0; i<rcnt; i++) {
+    GlobalEbbCtrTest(acnt);
+    HeapEbbCtrTest(acnt);
+  }
+
+  MY_PRINT("_UBENCH_EBB_TEST_: END\n");
+
 }
 
 void event_test(struct Arguments *args)
@@ -255,18 +537,10 @@ void event_test(struct Arguments *args)
  // Base line Event spawn numbers
   if (!args->tests.event)  return;
 
-  MY_PRINT("_UBENCH_CPP_TEST_: START\n");
-  MY_PRINT("_UBENCH_CPP_TEST_: END\n");
+  MY_PRINT("_UBENCH_EVENT_TEST_: START\n");
+  MY_PRINT("_UBENCH_EVENT_TEST_: END\n");
 }
 
-void ebb_test(struct Arguments *args) 
-{
-  if (!args->tests.ebb) return;
-
-  MY_PRINT("_UBENCH_EBB_TEST_: START\n");
-  MY_PRINT("_UBENCH_EBB_TEST_: END\n");
-
-}
 
 extern void hoard_threadtest(int,char **);
 
@@ -365,27 +639,35 @@ process_args(int argc, char **argv, struct Arguments *args)
 
   args->repeatCnt = REPEAT_CNT;
   args->actionCnt = ACTION_CNT;
+  args->processorCnt = PROCESSOR_CNT;
 
   opterr = 0;
 
-  while ((c = getopt (argc, argv, "hBCEIF:cevms")) != -1) {
+  while ((c = getopt (argc, argv, "hA:BCEF:IP:R:cevmps")) != -1) {
     switch (c)
       { 
       case 'h':
-	MY_PRINT("%s: [-h] [-B] [-C] [-E] [-I] [-F file] [-c] [-e] [-v] [-m] [-s]\n"
+	MY_PRINT("%s: [-h] [-A actionCount] [-B] [-C] [-E] [-F file] [-I] [-P  processorCount] [-R repeatCount] [-c] [-e] [-v] [-m] [-p] [-s]\n"
 		" EbbRT micro benchmarks\n"
 		" -h : help\n"
+		" -A actionCount : number of times to do test action\n"
                 " -B : run tests on Backend\n"
                 " -C : Command line test\n"
                 " -E : Environment test\n"
-		" -I : Standard Input test\n"
 		" -F file : File Input test\n"
+		" -I : Standard Input test\n"
+                " -P processorCount: number of processors/cores\n"
+		" -R repeatCount : number of times to repeat test\n"
 		" -c : run basic C++ tests\n"
 		" -e : run basic Ebb tests\n"
 		" -v : run Event tests\n"
 		" -m : malloc tests\n"
+  	        "- p : mp tests\n"
    	        " -s : spawn test\n", argv[0]);
 	return -1;
+      case 'A':
+	args->actionCnt = atoi(optarg);
+	break;
       case 'B':
 	args->backend = 1;
 	break;
@@ -401,6 +683,12 @@ process_args(int argc, char **argv, struct Arguments *args)
       case 'I':
 	args->tests.standardin = 1;
 	break;
+      case 'P':
+	args->processorCnt = atoi(optarg);
+	break;
+      case 'R':
+	args->repeatCnt = atoi(optarg);
+	break;
       case 'm':
 	args->tests.malloc = 1;
 	break;
@@ -409,6 +697,9 @@ process_args(int argc, char **argv, struct Arguments *args)
 	break;
       case 'e':
 	args->tests.ebb = 1;
+	break;
+      case 'p':
+	args->tests.mp = 1;
 	break;
       case 'v':
 	args->tests.event = 1;
@@ -542,8 +833,9 @@ void AppMain()
   cpp_test(&args);
   ebb_test(&args);
   event_test(&args);
-  malloc_test(&args);
   spawn_test(&args);
+  mp_test(&args);
+  malloc_test(&args);
 
   MY_PRINT("_UBENCH_BENCHMARKS_: End\n");
 
