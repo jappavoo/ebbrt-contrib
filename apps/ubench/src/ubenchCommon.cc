@@ -137,6 +137,7 @@ class VirtualCtr {
   int _val;
 public:
   VirtualCtr() : _val(0) {}
+  virtual ~VirtualCtr() {}
   virtual void inc() { _val++; }
   virtual void dec() { _val--; }
   virtual int val() { return _val; }
@@ -148,8 +149,8 @@ class MPSharedCtr {
 public:
   MPSharedCtr() : _val(0) {}
   void inc() { _val++; }
-  virtual void dec() { _val--; }
-  virtual int val() { return _val; }
+  void dec() { _val--; }
+  int val() { return _val; }
 };
 
 class EbbCtr;
@@ -157,11 +158,17 @@ typedef EbbRef<EbbCtr> EbbCtrRef ;
 
 class EbbCtr : public SharedEbb<EbbCtr> {
   int _val;
-  EbbCtr() : _val(0) {}
+  EbbCtr() : _val(0)  {}
 public:
   void inc() { _val++; }
   void dec() { _val--; }
   int val() { return _val; }
+
+  void destroy() { 
+    // FIXME: We don't support EbbId Cleanup yet so
+    // we are only reclaiming rep memory
+    delete this;
+  }
 
   static EbbCtrRef Create(EbbId id=ebb_allocator->Allocate()) {
     return SharedEbb<EbbCtr>::Create(new EbbCtr, id);
@@ -187,6 +194,12 @@ public:
   void inc() { _val++; }
   void dec() { _val--; }
   int val() { return _val; }
+
+  void destroy() { 
+    // FIXME: We don't support EbbId Cleanup yet so
+    // we are only reclaiming rep memory
+    delete this;
+  }
 
   static MPSharedEbbCtrRef Create(EbbId id=ebb_allocator->Allocate()) {
     return SharedEbb<MPSharedEbbCtr>::Create(new MPSharedEbbCtr, id);
@@ -240,6 +253,24 @@ public:
       sum += rep->_val;
     }
     return sum;
+  };
+
+  void destroy()  {    
+    LocalIdMap::Accessor accessor; // serves as a lock on the rep map
+    auto found = local_id_map->Find(accessor, myId());
+    if (!found)
+        throw std::runtime_error("Failed to find root for MulticoreEbb");
+    auto pair = 
+      boost::any_cast<std::pair<Root *, 
+				boost::container::flat_map<size_t, 
+							   MPMultiEbbCtr *>>>
+      (&accessor->second);
+    auto& rep_map = pair->second;
+    for (auto it = rep_map.begin(); it != rep_map.end() ; it++) {
+      auto rep = boost::any_cast<const MPMultiEbbCtr *>(it->second);
+      delete rep;
+      it->second = NULL;
+    }
   };
   
   static MPMultiEbbCtrRef Create(EbbId id=ebb_allocator->Allocate()) {
@@ -369,6 +400,14 @@ HeapCtrTest(int cnt)
 	   __PFUNC__,1, nsdiff(start,end));
 
   CtrRefWork(heapCtr,cnt);
+
+  start = now();
+  delete heapCtr;
+  end = now();
+
+  MY_PRINT("RES: %s: delete Ctr: %" PRId32 " %" PRIu64 "\n", 
+	   __PFUNC__,1, nsdiff(start,end));
+
 }
 
 
@@ -386,6 +425,14 @@ VirtualHeapCtrTest(int cnt)
 	   __PFUNC__,1, nsdiff(start,end));
 
   CtrRefWork(virtHeapCtr,cnt);
+
+  start = now();
+  delete virtHeapCtr;
+  end = now();
+  assert(virtHeapCtr!=NULL);
+
+  MY_PRINT("RES: %s: delete VirtualCtr: %" PRId32 " %" PRIu64 "\n", 
+	   __PFUNC__,1, nsdiff(start,end));
 }
 
 
@@ -405,6 +452,13 @@ MPSharedHeapCtrTest(int cnt, size_t n)
   MPTest(__PFUNC__, cnt, n, [ctr](int cnt) {
       MPCtrRefWork(ctr,cnt);
     } );
+
+  start = now();
+  delete ctr;
+  end = now();
+
+  MY_PRINT("RES: %s: delete MPSharedHeapCtr: %" PRId32 " %" PRIu64 "\n", 
+	   __PFUNC__,1, nsdiff(start,end));
 }
 
 void
@@ -437,6 +491,13 @@ HeapEbbCtrTest(int cnt)
 	   __PFUNC__,1, nsdiff(start,end));
 
   CtrRefWork(heapEbbCtr,cnt);
+
+  start = now();
+  heapEbbCtr->destroy();
+  end = now();
+
+  MY_PRINT("RES: %s: EbbCtr::destroy() : %" PRId32 " %" PRIu64 "\n", 
+	   __PFUNC__,1, nsdiff(start,end));
 }
 
 
@@ -456,6 +517,14 @@ MPSharedHeapEbbCtrTest(int cnt, size_t n)
   MPTest(__PFUNC__, cnt, n, [ctr](int cnt) {
       MPCtrRefWork(ctr,cnt);
     } );
+
+  start = now();
+  ctr->destroy();
+  end = now();
+
+  MY_PRINT("RES: %s: MPSharedEbbCtr::destroy() : %" PRId32 " %" PRIu64 "\n", 
+	   __PFUNC__,1, nsdiff(start,end));
+
 }
 
 
@@ -475,6 +544,13 @@ MPMultiHeapEbbCtrTest(int cnt, size_t n)
   MPTest(__PFUNC__, cnt, n, [ctr](int cnt) {
       MPCtrRefWork(ctr,cnt);
     } );
+
+  start = now();
+  ctr->destroy();
+  end = now();
+
+  MY_PRINT("RES: %s: MPMultiEbbCtr::destroy() : %" PRId32 " %" PRIu64 "\n", 
+	   __PFUNC__,1, nsdiff(start,end));
 }
 
 void
