@@ -1,6 +1,9 @@
 #!/bin/bash
 set -x
-RUNS=3
+RUNS=${EXP_RUNS:-1}
+REPEAT=${EXP_REPEAT:-1}
+DONRUNS=${EXP_DONRUNS:-100}
+DONREPEAT=${EXP_DONREPEAT:-1000}
 EXEC=apps/ubench/hosted/build/Release/ubench
 DONEXPDIR=/home/don/kh/experiment/ubench
 BOOTFILE=${DONEXPDIR}/boot
@@ -15,8 +18,8 @@ EBBRTOUT=ubench-ebbrt.out
 RUNDIR=/home/don/kh/runs/current/run
 DONEFILE=DONE_$$_$TS
 # THE ACTUAL EXPERIMENT COMMANDS
-LINUXRUN='for ((i=0; i<$RUNS; i++)); do $EXEC -c; done > $LINUXOUT'
-EBBRTRUN='for ((i=0; i<$RUNS; i++)); do $EXEC -B -c; done > $EBBRTOUT'
+LINUXRUN='for ((i=0; i<$RUNS; i++)); do $EXEC -R $REPEAT -c; done > $LINUXOUT'
+EBBRTRUN='for ((i=0; i<$RUNS; i++)); do $EXEC -R $REPEAT -B -c; done > $EBBRTOUT'
 
 
 function acquireExpLock()
@@ -73,6 +76,7 @@ MYDIR=\$1
 RUNDIR=\$MYDIR/run
 APPDIR=\$MYDIR/files
 RUNS=$RUNS
+REPEAT=$REPEAT
 EXEC=\$APPDIR/$(basename $EXEC)
 LINUXOUT=\$RUNDIR/$LINUXOUT
 EBBRTOUT=\$RUNDIR/$EBBRTOUT
@@ -142,6 +146,9 @@ if [[ ! -a $EXEC ]]; then
 fi
 
 if [[ -n $DODON ]]; then
+
+    RUNS=$DONRUNS
+    REPEAT=$DONREPEAT
 
     if ! acquireExpLock; then
 	echo "FAILED TO GET LOCK ON DON"
