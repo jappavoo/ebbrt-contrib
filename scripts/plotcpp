@@ -1,7 +1,7 @@
 #!/bin/bash
 #set -x
 # To use this you must run the ubench application and save its output to files
-# eg.  ubench -c > linux_native.out; ubench -B -c > ebbrt.out
+# eg.  ubench -c > ubench-linux_native.out; ubench -B -c > ebbrt.out
 
-plotubench cpp 'ebbrt:cpp-ebbrt.out linuxN:cpp-linux_native.out' 'global:void.Global.* stack:Stack.* heap:void.Heap.*-.[idv] heapNew:void.Heap.*new' 
-plotubench virtcpp 'ebbrt:cpp-ebbrt.out linuxN:cpp-linux_native.out' 'virtGlobal:void.VirtualGlobal.* virtHeap:void.VirtualHeap.*-.[idv] heapNew:void.VirtualHeap.*new' 
+plotubench cpp 'ebbrt:ubench-ebbrt.out linuxN:ubench-linux_native.out' 'global:void.Global.* stack:Stack.* heap:void.Heap.*-.[idv] heapNew:void.Heap.*new' 
+plotubench virtcpp 'ebbrt:ubench-ebbrt.out linuxN:ubench-linux_native.out' 'virtGlobal:void.VirtualGlobal.* virtHeap:void.VirtualHeap.*-.[idv] heapNew:void.VirtualHeap.*new' 

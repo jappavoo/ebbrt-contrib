@@ -1,0 +1,174 @@
+#!/bin/bash
+set -x
+RUNS=3
+EXEC=apps/ubench/hosted/build/Release/ubench
+DONEXPDIR=/home/don/kh/experiment/ubench
+BOOTFILE=${DONEXPDIR}/boot
+STARTFILE=${DONEXPDIR}/start
+STOPFILE=${DONEXPDIR}/stop
+DONEXPPTR=/home/don/kh/experiment/current
+TS="$(date +%s)"
+SESSION=myDONlock_$$_$TS
+EXTRAFILES="apps/ubench/hosted/build/Release/bm"
+LINUXOUT=ubench-linux_native.out
+EBBRTOUT=ubench-ebbrt.out
+RUNDIR=/home/don/kh/runs/current/run
+DONEFILE=DONE_$$_$TS
+# THE ACTUAL EXPERIMENT COMMANDS
+LINUXRUN='for ((i=0; i<$RUNS; i++)); do $EXEC -c; done > $LINUXOUT'
+EBBRTRUN='for ((i=0; i<$RUNS; i++)); do $EXEC -B -c; done > $EBBRTOUT'
+
+
+function acquireExpLock()
+{
+   screen -S $SESSION -d -m  minicom
+   # give minicom time to fail
+   sleep 1
+   screen -ls $SESSION | grep "$SESSION"
+}
+
+function releaseExpLock()
+{
+  screen -X -S $SESSION quit
+}
+
+function setExp()
+{
+    if [[ -a $DONEXPPTR ]]; then
+	! rm -f $DONEXPPTR && echo "ERROR: setExp " && exit -1
+    fi
+    ! ln -s $DONEXPDIR $DONEXPPTR && echo "ERROR: setExp ln" && exit -1
+}
+
+function mkDonDir()
+{
+  [[ -a $DONEXPDIR ]] && ! rm -rf $DONEXPDIR && echo "ERROR rm -rf $DONEXPDIR" && exit -1
+  ! mkdir $DONEXPDIR && echo "ERROR: mkdir $DONEXPDIR" && exit -1
+}
+
+function mkExpBoot()
+{
+    cat > $BOOTFILE  <<EOF
+#!/bin/bash
+
+MYDIR=\$1
+KHDIR=\$MYDIR/khpy
+
+#copy khpy into /opt/khpy
+mkdir -p /opt/
+cp -r \$KHDIR /opt
+
+# start up kh
+\$MYDIR/scripts/kh-init
+EOF
+  chmod +x $BOOTFILE
+}
+
+function mkExpStart()
+{
+    cat > $STARTFILE <<EOF
+#!/bin/bash
+
+MYDIR=\$1
+RUNDIR=\$MYDIR/run
+APPDIR=\$MYDIR/files
+RUNS=$RUNS
+EXEC=\$APPDIR/$(basename $EXEC)
+LINUXOUT=\$RUNDIR/$LINUXOUT
+EBBRTOUT=\$RUNDIR/$EBBRTOUT
+
+export LD_LIBRARY_PATH=/home/kh/opt/lib/:\$APPDIR
+
+$LINUXRUN
+$EBBRTRUN
+
+touch \$RUNDIR/$DONEFILE
+
+/etc/init.d/don_experiment stop
+/bin/kexec-to-don
+
+EOF
+ chmod +x $STARTFILE
+}
+
+function mkExpStop()
+{
+    cat > $STOPFILE <<EOF
+#!/bin/bash
+EOF
+  chmod +x $STOPFILE
+}
+
+function mkExpLinks()
+{
+    ln -s -f $DONEXPDIR/../../khpy $DONEXPDIR
+    ln -s -f $DONEXPDIR/../../scripts $DONEXPDIR
+}
+
+function startExp()
+{
+  ssh -f don "/opt/kexec-to-kh"
+}
+
+function copyFiles()
+{
+   deps="$(ldd $EXEC |while read line; do line=${line#*/}; echo /${line%% *}; done | grep -v 'linux-vdso.so')"
+   files="$EXEC $EXTRAFILES $deps"
+   [[ -a $DONEXPDIR/files ]] && rm -rf $DONEXPDIR/files
+   mkdir $DONEXPDIR/files
+   cp -aL -t $DONEXPDIR/files $files 
+}
+
+function copyOutputs()
+{
+  cp $RUNDIR/*.out .
+}
+
+function expWait()
+{
+  while [[ ! -a $RUNDIR/$DONEFILE ]]; do 
+    sleep 10
+  done
+}
+
+DODON=$1
+
+echo "making  $EXEC"
+make -C apps/ubench/hosted/build 
+
+if [[ ! -a $EXEC ]]; then
+  echo "FAILED to make $EXEC"
+  exit -1
+fi
+
+if [[ -n $DODON ]]; then
+
+    if ! acquireExpLock; then
+	echo "FAILED TO GET LOCK ON DON"
+	exit -1
+    fi
+
+    if [[ -n $EXP_MONITOR ]]; then 
+       xterm -e "screen -r $SESSION" &
+    fi
+
+    mkDonDir
+    copyFiles
+    mkExpBoot
+    mkExpStart
+    mkExpStop
+    mkExpLinks
+    setExp
+    startExp
+    expWait
+
+    releaseExpLock
+    copyOutputs
+else
+    eval $LINUXRUN
+    eval $EBBRTRUN
+fi
+
+echo "MAKING PLOTS"
+plotcpp
+
