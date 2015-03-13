@@ -16,6 +16,8 @@ struct Arguments {
     int env;
     int spawn;
     int mp;
+    int timing;
+    int nullfunc;
   } tests;
   int backend;
   int repeatCnt;
@@ -23,12 +25,11 @@ struct Arguments {
   int processorCnt;
 };
 
-int process_args(int, char **, struct Arguments *);
-void cmdline_test(struct Arguments *);
-void env_test(struct Arguments *);
+int MPTest(const char *name, int cnt, size_t n,
+	    ebbrt::MovableFunction<int(int)>work);
+
+
 void AppMain(void);
-void MPTest(const char *name, int cnt, size_t n,
-	    ebbrt::MovableFunction<void(int)>work);
 
 struct MainArgs {
   int argc;
