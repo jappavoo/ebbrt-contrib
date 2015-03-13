@@ -210,15 +210,17 @@ private:
   MPMultiEbbCtrRoot(EbbId id) : _id(id) {}
 };
 
-class MPMultiEbbCtr : public MulticoreEbb<MPMultiEbbCtr, MPMultiEbbCtrRoot> {
+
+class MPMultiEbbCtr : public MulticoreEbb<MPMultiEbbCtr, MPMultiEbbCtrRoot>  {
   typedef MPMultiEbbCtrRoot Root;
+  typedef MulticoreEbb<MPMultiEbbCtr, Root> Parent;
   const Root &_root;
   EbbId myId() { return _root._id; }
 
   std::atomic<int> _val;
   MPMultiEbbCtr(const Root &root) : _root(root), _val(0) {}
   // give access to the constructor
-  friend class MulticoreEbb<MPMultiEbbCtr, MPMultiEbbCtrRoot>; 
+  friend  Parent;
 public:
   void inc() { _val++; }
   void dec() { _val--; }
@@ -260,7 +262,7 @@ public:
   };
   
   static MPMultiEbbCtrRef Create(EbbId id=ebb_allocator->Allocate()) {
-    return MulticoreEbb<MPMultiEbbCtr, void>::Create(new Root(id), id);
+    return Parent::Create(new Root(id), id);
   }
 };
 
@@ -644,7 +646,8 @@ void
 spawnNullLocalTest( int acnt, int n)
 {
   MPTest(__PFUNC__, acnt, n, [](int acnt) {
-      for (int i=0; i<acnt; i++) ebbrt::event_manager->Spawn([](){});
+      for (int i=0; i<acnt; i++) 
+	ebbrt::event_manager->Spawn([](){},/* force_async=*/true);
     });
 }
 
@@ -655,7 +658,7 @@ spawnNullRemoteTest(int acnt, int n)
   MPTest(__PFUNC__, acnt, n, [numCores](int acnt) {
       for (int i=0; i<acnt; i++) {
 	for (size_t j=0; j<numCores; j++) {
-	  ebbrt::event_manager->SpawnRemote([](){}, indexToCPU(i));
+	  ebbrt::event_manager->SpawnRemote([](){}, indexToCPU(j));
 	}
       }
     });
