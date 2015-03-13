@@ -23,8 +23,6 @@
 
 #define MY_PRINT printf
 
-typedef std::chrono::high_resolution_clock myclock;
-
 #else
 
 // BAREMETAL
@@ -36,13 +34,10 @@ typedef std::chrono::high_resolution_clock myclock;
 #include <strings.h>
 #include <cctype>
 
-#include <ebbrt/Clock.h>
 #include <ebbrt/Debug.h>
 #include <ebbrt/Console.h>
 
 #define MY_PRINT ebbrt::kprintf
-
-typedef ebbrt::clock::Wall myclock;
 
 void  bootimgargs_test(struct Arguments *);
 #endif
@@ -60,15 +55,6 @@ void  bootimgargs_test(struct Arguments *);
 
 using namespace ebbrt;
 
-typedef std::chrono::time_point<myclock> tp;
-tp now() { return myclock::now(); }
-
-uint64_t
-nsdiff(tp start, tp end)
-{
-  return std::chrono::duration_cast<std::chrono::nanoseconds>
-  (end-start).count();
-}
 
 struct alignas(cache_size) Result {
   uint64_t time;
@@ -608,16 +594,6 @@ void ebb_test(struct Arguments *args)
 
 }
 
-void event_test(struct Arguments *args)
-{
- // Base line Event spawn numbers
-  if (!args->tests.event)  return;
-
-  MY_PRINT("_UBENCH_EVENT_TEST_: START\n");
-  MY_PRINT("_UBENCH_EVENT_TEST_: END\n");
-}
-
-
 extern void hoard_threadtest(int,char **);
 
 void malloc_test(struct Arguments *args)
@@ -657,54 +633,44 @@ if (!args->tests.env)  return;
 }
 
 void
+spawnNullLocalTest( int acnt, int n)
+{
+  MPTest(__PFUNC__, acnt, n, [](int acnt) {
+      for (int i=0; i<acnt; i++) ebbrt::event_manager->Spawn([](){});
+    });
+}
+
+void
+spawnNullRemoteTest(int acnt, int n)
+{
+  size_t numCores = ebbrt::Cpu::Count();
+  MPTest(__PFUNC__, acnt, n, [numCores](int acnt) {
+      for (int i=0; i<acnt; i++) {
+	for (size_t j=0; j<numCores; j++) {
+	  ebbrt::event_manager->SpawnRemote([](){}, indexToCPU(i));
+	}
+      }
+    });
+}
+
+void
 spawn_test(struct Arguments *args)
 {
-  static ebbrt::SpinBarrier bar(ebbrt::Cpu::Count());
-  size_t n = ebbrt::Cpu::Count();
-  size_t theCpu=ebbrt::Cpu::GetMine();
-  std::atomic<size_t> count(0);
-  if (!args->tests.spawn)  return;
+  if (!args->tests.spawn)  return; 
   MY_PRINT("_UBENCH_SPAWN_TEST_: Start\n");
 
-  EventManager::EventContext context;
-  for (size_t i=0; i<n; i++) {
-#ifndef __EBBRT_BM__
-    ebbrt::Cpu *cpu = ebbrt::Cpu::GetByIndex(i);
-    ebbrt::Context *ctxt = cpu->get_context();
-    ebbrt::event_manager->Spawn([n,&context,theCpu,&count]() {
-      MY_PRINT("HELLO: spawned: %zd %zd: %s:%d\n", size_t(ebbrt::Cpu::GetMine()), 
-	     size_t(*ebbrt::active_context),
-	     __FILE__, __LINE__);
-      bar.Wait();
-      MY_PRINT("GOODBYE: spawned: %zd %zd: %s:%d\n", size_t(ebbrt::Cpu::GetMine()), 
-	     size_t(*ebbrt::active_context),
-	     __FILE__, __LINE__);
-      bar.Wait();
-      count++;
-      while (count < n);
-      if (ebbrt::Cpu::GetMine()==theCpu) {
-	ebbrt::event_manager->ActivateContext(std::move(context));
-      }
-      }, ctxt);
-#else
-    ebbrt::event_manager->SpawnRemote([n,&context,theCpu,&count]() {
-      MY_PRINT("HELLO: spawned: %d\n", size_t(ebbrt::Cpu::GetMine()));
-      bar.Wait();
-      MY_PRINT("GOODBYE: spawned:%d\n", size_t(ebbrt::Cpu::GetMine()));
-      bar.Wait();
-      count++;
-      while (count < n);
-      if (ebbrt::Cpu::GetMine()==theCpu) {
-	ebbrt::event_manager->ActivateContext(std::move(context));
-      }
-      }, i);
-#endif
+  int rcnt = args->repeatCnt;
+  int acnt = args->actionCnt;
+  int n = args->processorCnt; 
+
+  for (int i=0; i<rcnt; i++) {
+    spawnNullLocalTest(acnt, n);
+    spawnNullRemoteTest(acnt, n);
   }
-      ebbrt::event_manager->SaveContext(context);
-      MY_PRINT("Spawned: %d  Finished: %d\n", (int)n, (int)count);
-      assert(n==count);
-      MY_PRINT("_UBENCH_SPAWN_TEST_: END\n");
+
+  MY_PRINT("_UBENCH_SPAWN_TEST_: END\n");
 }
+
 
 int 
 process_args(int argc, char **argv, struct Arguments *args) 
@@ -723,7 +689,7 @@ process_args(int argc, char **argv, struct Arguments *args)
     switch (c)
       { 
       case 'h':
-	MY_PRINT("%s: [-h] [-A actionCount] [-B] [-C] [-E] [-F file] [-I] [-P  processorCount] [-R repeatCount] [-c] [-e] [-v] [-m] [-p] [-s]\n"
+	MY_PRINT("%s: [-h] [-A actionCount] [-B] [-C] [-E] [-F file] [-I] [-P  processorCount] [-R repeatCount] [-c] [-e] [-m] [-p] [-s]\n"
 		" EbbRT micro benchmarks\n"
 		" -h : help\n"
 		" -A actionCount : number of times to do test action\n"
@@ -734,12 +700,11 @@ process_args(int argc, char **argv, struct Arguments *args)
 		" -I : Standard Input test\n"
                 " -P processorCount: number of processors/cores\n"
 		" -R repeatCount : number of times to repeat test\n"
-		" -c : run basic C++ tests\n"
-		" -e : run basic Ebb tests\n"
-		" -v : run Event tests\n"
+		" -c : run basic UP  C++ tests\n"
+		" -e : run basic UP Ebb tests\n"
 		" -m : malloc tests\n"
-  	        "- p : mp tests\n"
-   	        " -s : spawn test\n", argv[0]);
+  	        "- p : run MP C++ and Ebb tests\n"
+   	        " -s : run MP Local and Remote spawn test\n", argv[0]);
 	return -1;
       case 'A':
 	args->actionCnt = atoi(optarg);
@@ -776,9 +741,6 @@ process_args(int argc, char **argv, struct Arguments *args)
 	break;
       case 'p':
 	args->tests.mp = 1;
-	break;
-      case 'v':
-	args->tests.event = 1;
 	break;
       case 's':
 	args->tests.spawn = 1;
@@ -908,7 +870,6 @@ void AppMain()
 
   cpp_test(&args);
   ebb_test(&args);
-  event_test(&args);
   spawn_test(&args);
   mp_test(&args);
   malloc_test(&args);
