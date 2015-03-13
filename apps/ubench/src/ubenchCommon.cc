@@ -640,30 +640,6 @@ void malloc_test(struct Arguments *args)
   MY_PRINT("_UBENCH_MALLOC_TEST_: END\n");
 }
 
-void cmdline_test(struct Arguments *args) 
-{
-if (!args->tests.cmdline) return;
-  MY_PRINT("_UBENCH_CMDLINE_TEST_: Start\n");
-  for (int i=0; i<UNIX::cmd_line_args->argc(); i++) {
-    MY_PRINT("UNIX::cmd_line_args->argv(%d)=%s\n",i,
-		   UNIX::cmd_line_args->argv(i));
-  }
-  for (int i=optind; i < UNIX::cmd_line_args->argc(); i++) {
-    MY_PRINT("non option arguments %s\n", UNIX::cmd_line_args->argv(i));
-  }
-  MY_PRINT("_UBENCH_CMDLINE_TEST_: END\n");
-}
-
-void env_test(struct Arguments *args) {
-if (!args->tests.env)  return;
-  MY_PRINT("_UBENCH_ENVIRONMENT_TEST_: Start\n");
-  for (int i=0; UNIX::environment->environ()[i]!=NULL; i++) {
-    MY_PRINT("%d: ev=%s\n", i, UNIX::environment->environ()[i]);
-  }
-  MY_PRINT("getenv(\"hello\")=%s\n", UNIX::environment->getenv("hello"));
-  MY_PRINT("_UBENCH_ENVIRONMENT_TEST_: End\n");
-}
-
 void
 spawnNullLocalTest( int acnt, int n)
 {
@@ -701,6 +677,31 @@ spawn_test(struct Arguments *args)
   }
 
   MY_PRINT("_UBENCH_SPAWN_TEST_: END\n");
+}
+
+
+void cmdline_test(struct Arguments *args) 
+{
+if (!args->tests.cmdline) return;
+  MY_PRINT("_UBENCH_CMDLINE_TEST_: Start\n");
+  for (int i=0; i<UNIX::cmd_line_args->argc(); i++) {
+    MY_PRINT("UNIX::cmd_line_args->argv(%d)=%s\n",i,
+		   UNIX::cmd_line_args->argv(i));
+  }
+  for (int i=optind; i < UNIX::cmd_line_args->argc(); i++) {
+    MY_PRINT("non option arguments %s\n", UNIX::cmd_line_args->argv(i));
+  }
+  MY_PRINT("_UBENCH_CMDLINE_TEST_: END\n");
+}
+
+void env_test(struct Arguments *args) {
+  if (!args->tests.env)  return;
+  MY_PRINT("_UBENCH_ENVIRONMENT_TEST_: Start\n");
+  for (int i=0; UNIX::environment->environ()[i]!=NULL; i++) {
+    MY_PRINT("%d: ev=%s\n", i, UNIX::environment->environ()[i]);
+  }
+  MY_PRINT("getenv(\"hello\")=%s\n", UNIX::environment->getenv("hello"));
+  MY_PRINT("_UBENCH_ENVIRONMENT_TEST_: End\n");
 }
 
 
