@@ -1,0 +1,24 @@
+#!/bin/bash
+#set -x
+# To use this you must run the ubench application and save its output to files
+# eg.  ubench -c > ubench-linux_native.out; ubench -B -c > ebbrt.out
+
+#plotubench cpp 'ebbrt:ubench-ebbrt.out linuxN:ubench-linux_native.out' 'global:int.GlobalCtrTest stack:int.StackCtrTest heap:int.HeapCtrTest.*-.[idv] heapNew:int.HeapCtrTest.*new heapDelete:int.HeapCtrTest.*delete' 
+#plotubench virtcpp 'ebbrt:ubench-ebbrt.out linuxN:ubench-linux_native.out' 'virtGlobal:int.VirtualGlobalCtrTest virtHeap:int.VirtualHeapCtrTest.*-.[idv] heapNew:int.VirtualHeapCtrTest.*new heapDelete:int.VirtualHeapCtrTest.*delete' 
+#plotubench ebb-UP 'ebbrt:ubench-ebbrt.out linuxN:ubench-linux_native.out' 'Global:int.GlobalEbbCtrTest.*-.[idv] Heap:int.HeapEbbCtrTest.*-.[idv] HeapCreate:int.HeapEbbCtrTest.*Create HeapDestroy:int.HeapEbbCtrTest.*destroy' 
+
+procs=$(grep 'int.timing_test' ubench-linux_native.out | grep RES | sed 's/.*n=//g;s/ .*$//g' | sort -n | uniq)
+bars='';
+for p in $procs; do
+bars="$bars $p:int.timing_test.*n=$p.i="
+done
+#echo $bars
+plotubench timing 'ebbrt:ubench-ebbrt.out linuxN:ubench-linux_native.out' "$bars"
+
+procs=$(grep 'int.nullfunc_test' ubench-linux_native.out | grep RES | sed 's/.*n=//g;s/ .*$//g' | sort -n | uniq)
+bars='';
+for p in $procs; do
+bars="$bars $p:int.nullfunc_test.*n=$p.i="
+done
+#echo $bars
+plotubench nullfunc 'ebbrt:ubench-ebbrt.out linuxN:ubench-linux_native.out' "$bars"

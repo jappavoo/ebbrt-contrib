@@ -17,9 +17,33 @@ LINUXOUT=ubench-linux_native.out
 EBBRTOUT=ubench-ebbrt.out
 RUNDIR=/home/don/kh/runs/current/run
 DONEFILE=DONE_$$_$TS
+MAXPROCESSORS=${EXP_MAXPROCS:-12}
+
 # THE ACTUAL EXPERIMENT COMMANDS
-LINUXRUN='for ((i=0; i<$RUNS; i++)); do $EXEC -R $REPEAT -c; done > $LINUXOUT'
-EBBRTRUN='for ((i=0; i<$RUNS; i++)); do $EXEC -R $REPEAT -B -c; done > $EBBRTOUT'
+LINUXRUN='
+for ((i=0; i<$RUNS; i++)); do 
+   $EXEC -R $REPEAT -c;
+   $EXEC -R $REPEAT -e;
+   for ((p=1; p<=$MAXPROCESSORS; p++)); do  
+     $EXEC -P $p -R $REPEAT -t; 
+     $EXEC -P $p -R $REPEAT -n;
+     $EXEC -P $p -R $REPEAT -p;
+     $EXEC -P $p -R $REPEAT -A 100 -s;
+     $EXEC -m --hoardthreadtest $p;
+   done;
+done > $LINUXOUT'
+EBBRTRUN='
+for ((i=0; i<$RUNS; i++)); do 
+   $EXEC -B -R $REPEAT -c; 
+   $EXEC -B -R $REPEAT -e;
+   for ((p=1; p<=$MAXPROCESSORS; p++)); do  
+     $EXEC -B -P $p -R $REPEAT -t; 
+     $EXEC -B -P $p -R $REPEAT -n;
+     $EXEC -B -P $p -R $REPEAT -p;
+     $EXEC -B -P $p -R $REPEAT -A 100 -s;
+     $EXEC -B -m --hoardthreadtest $p;
+   done;
+done > $EBBRTOUT'
 
 
 function acquireExpLock()
@@ -137,8 +161,10 @@ function expWait()
 
 DODON=$1
 
-echo "making  $EXEC"
-make -C apps/ubench/hosted/build 
+if [[ -z $EXP_SKIPMAKE ]]; then
+  echo "making  $EXEC"
+  make -C apps/ubench/hosted/build 
+fi
 
 if [[ ! -a $EXEC ]]; then
   echo "FAILED to make $EXEC"
@@ -177,4 +203,4 @@ else
 fi
 
 echo "MAKING PLOTS"
-plotcpp
+plotAll
