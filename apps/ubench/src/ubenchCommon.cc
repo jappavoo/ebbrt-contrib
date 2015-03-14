@@ -211,7 +211,19 @@ class MPMultiEbbCtrRoot {
 private:
   friend class MPMultiEbbCtr;
   EbbId _id;
-  MPMultiEbbCtrRoot(EbbId id) : _id(id) {}
+  mutable MPMultiEbbCtr *repArray[ebbrt::Cpu::kMaxCpus];
+
+  MPMultiEbbCtrRoot(EbbId id) : _id(id) {
+    bzero(repArray,sizeof(repArray));
+  }
+
+  void setRep(size_t i, MPMultiEbbCtr *rep) const { 
+    repArray[i] = rep;
+  }
+
+  int gatherVal(void) const;
+  int otherGatherVal(void) const;
+  void destroy() const;
 };
 
 
@@ -222,52 +234,70 @@ class MPMultiEbbCtr : public MulticoreEbb<MPMultiEbbCtr, MPMultiEbbCtrRoot>  {
   EbbId myId() { return _root._id; }
 
   std::atomic<int> _val;
-  MPMultiEbbCtr(const Root &root) : _root(root), _val(0) {}
+  MPMultiEbbCtr(const Root &root) : _root(root), _val(0) {
+    _root.setRep(ebbrt::Cpu::GetMine(), this);
+  }
   // give access to the constructor
   friend  Parent;
+  friend MPMultiEbbCtrRoot;
 public:
   void inc() { _val++; }
   void dec() { _val--; }
-  int val()  {    
-    int sum=0;
-    LocalIdMap::ConstAccessor accessor; // serves as a lock on the rep map
-    auto found = local_id_map->Find(accessor, myId());
-    if (!found)
-        throw std::runtime_error("Failed to find root for MulticoreEbb");
-    auto pair = 
-      boost::any_cast<std::pair<Root *, 
-				boost::container::flat_map<size_t, 
-							   MPMultiEbbCtr *>>>
-      (&accessor->second);
-    const auto& rep_map = pair->second;
-    for (auto it = rep_map.begin(); it != rep_map.end() ; it++) {
-      auto rep = boost::any_cast<const MPMultiEbbCtr *>(it->second);
-      sum += rep->_val;
-    }
-    return sum;
-  };
+  int val() { return _root.gatherVal(); }
 
-  void destroy()  {    
-    LocalIdMap::Accessor accessor; // serves as a lock on the rep map
-    auto found = local_id_map->Find(accessor, myId());
-    if (!found)
-        throw std::runtime_error("Failed to find root for MulticoreEbb");
-    auto pair = 
-      boost::any_cast<std::pair<Root *, 
-				boost::container::flat_map<size_t, 
-							   MPMultiEbbCtr *>>>
-      (&accessor->second);
-    auto& rep_map = pair->second;
-    for (auto it = rep_map.begin(); it != rep_map.end() ; it++) {
-      auto rep = boost::any_cast<const MPMultiEbbCtr *>(it->second);
-      delete rep;
-      it->second = NULL;
-    }
-  };
+  void destroy()  { _root.destroy(); }
   
   static MPMultiEbbCtrRef Create(EbbId id=ebb_allocator->Allocate()) {
     return Parent::Create(new Root(id), id);
   }
+};
+
+void
+MPMultiEbbCtrRoot::destroy(void) const
+{
+  size_t numCores=ebbrt::Cpu::Count();
+  for (size_t i=0; numCores && i<ebbrt::Cpu::kMaxCpus; i++) {
+    if (repArray[i]) { 
+      delete repArray[i]; 
+      numCores--;
+    }
+  }
+  delete this;
+}
+
+int 
+MPMultiEbbCtrRoot::gatherVal(void) const 
+{
+  int gval=0;
+  size_t numCores=ebbrt::Cpu::Count();
+  for (size_t i=0; numCores && i<ebbrt::Cpu::kMaxCpus; i++) {
+    if (repArray[i]) { 
+      gval=repArray[i]->_val;
+      numCores--;
+    }
+  }
+  return gval;
+}
+
+int 
+MPMultiEbbCtrRoot::otherGatherVal(void) const
+{
+  int gval=0;
+  LocalIdMap::ConstAccessor accessor; // serves as a lock on the rep map
+  auto found = local_id_map->Find(accessor, _id);
+  if (!found)
+    throw std::runtime_error("Failed to find root for MulticoreEbb");
+  auto pair = 
+    boost::any_cast<std::pair<MPMultiEbbCtrRoot *, 
+			      boost::container::flat_map<size_t, 
+							 MPMultiEbbCtr *>>>
+    (&accessor->second);
+  const auto& rep_map = pair->second;
+  for (auto it = rep_map.begin(); it != rep_map.end() ; it++) {
+    auto rep = boost::any_cast<const MPMultiEbbCtr *>(it->second);
+    gval += rep->_val;
+  }
+  return gval;
 };
 
 
