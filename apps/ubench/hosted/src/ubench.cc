@@ -42,6 +42,7 @@ namespace ebbrt {
   volatile int Cpu::inited_ = 0;
 
   std::mutex Cpu::init_lock_;
+  size_t Cpu::DefaultPhysCpus_;
 
   ebbrt::Cpu * Cpu::Create(size_t index) 
   {
@@ -113,6 +114,12 @@ namespace ebbrt {
     int i;
     pthread_attr_t attr;
     pthread_t rc=0;
+
+    {
+     char *str = getenv("EBBRT_NODE_ALLOCATOR_DEFAULT_CPUS"); 
+     DefaultPhysCpus_ = (str) ? atoi(str) : sysconf(_SC_NPROCESSORS_ONLN); 
+    }
+
     int n = GetPhysCpus();
 
     shutdown_.store(0);

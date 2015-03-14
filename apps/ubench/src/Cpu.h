@@ -10,7 +10,6 @@ namespace ebbrt {
   class Cpu {
   public:
     static const constexpr size_t kMaxCpus = 256;
-    
   Cpu(size_t index) : index_(index), ctxt_(rt_) {
       // printf("%p: index=%zd index_=%zd\n", this, index, index_);
     }
@@ -21,11 +20,7 @@ namespace ebbrt {
     static size_t Count();
     static pthread_t EarlyInit();
     static int GetPhysCpus() { 
-#if 1
-      return sysconf(_SC_NPROCESSORS_ONLN); 
-#else
-      return 2;
-#endif
+      return ebbrt::Cpu::DefaultPhysCpus_;
     }
     static void Shutdown(void);
     static void Exit(int val);
@@ -48,7 +43,7 @@ namespace ebbrt {
     static std::mutex init_lock_;
     static int numCpus_;
     static std::atomic<int> shutdown_;
-
+    static size_t DefaultPhysCpus_;
     size_t index_;
     pthread_t tid_;
     Nid nid_;

@@ -1036,7 +1036,7 @@ void AppMain()
       "bm/ubench.elf32";
     ebbrt::node_allocator->AllocateNode(bindir.string());
     return;
-  } 
+  }  
 #endif
 
   MY_PRINT("_UBENCH_BENCHMARKS_: Start\n");  
