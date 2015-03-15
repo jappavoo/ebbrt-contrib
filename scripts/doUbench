@@ -1,9 +1,17 @@
 #!/bin/bash
 set -x
+# ENVIRONMENT VARIABLES THAT CAN BE USED
+# TO OVERRIDE DEFAULT BEHAVIOR
+# Monitor hardware test via xterm/screen/minicom
+#EXP_MONITOR
+# force skip of make step
+#EXP_SKIPMAKE
 RUNS=${EXP_RUNS:-1}
 REPEAT=${EXP_REPEAT:-1}
 DONRUNS=${EXP_DONRUNS:-100}
 DONREPEAT=${EXP_DONREPEAT:-1000}
+MAXPROCESSORS=${EXP_MAXPROCS:-12}
+
 EXEC=apps/ubench/hosted/build/Release/ubench
 DONEXPDIR=/home/don/kh/experiment/ubench
 BOOTFILE=${DONEXPDIR}/boot
@@ -17,7 +25,6 @@ LINUXOUT=ubench-linux_native.out
 EBBRTOUT=ubench-ebbrt.out
 RUNDIR=/home/don/kh/runs/current/run
 DONEFILE=DONE_$$_$TS
-MAXPROCESSORS=${EXP_MAXPROCS:-12}
 
 # THE ACTUAL EXPERIMENT COMMANDS
 LINUXRUN='
@@ -163,7 +170,7 @@ DODON=$1
 
 if [[ -z $EXP_SKIPMAKE ]]; then
   echo "making  $EXEC"
-  make -C apps/ubench/hosted/build 
+  make -C apps/ubench/hosted/build -j8
 fi
 
 if [[ ! -a $EXEC ]]; then
