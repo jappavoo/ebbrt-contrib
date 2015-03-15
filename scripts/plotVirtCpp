@@ -1,0 +1,3 @@
+#!/bin/bash
+
+plotubench virtcpp 'ebbrt:ubench-ebbrt.out linuxN:ubench-linux_native.out' 'virtGlobal:int.VirtualGlobalCtrTest virtHeap:int.VirtualHeapCtrTest.*-.[idv] heapNew:int.VirtualHeapCtrTest.*new heapDelete:int.VirtualHeapCtrTest.*delete' 

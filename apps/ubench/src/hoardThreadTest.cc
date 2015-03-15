@@ -182,7 +182,7 @@ int hoard_threadtest (int argc, char * argv[])
     nthreads, niterations, nobjects, work, size);
 
   auto start = now();
-  MPTest("hoardThreadTest: per worker time", 1, nthreads, [](int) {
+  MPTest("int hoard_threadtest: worker", 1, nthreads, [](int) {
       worker();
       return 1;
     });

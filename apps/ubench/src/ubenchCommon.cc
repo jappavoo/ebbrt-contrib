@@ -498,19 +498,19 @@ MPSharedHeapCtrTest(int cnt, size_t n)
   MY_PRINT("RES: %s: new MPSharedCtr: %" PRId32 " %" PRIu64 "\n", 
 	   __PFUNC__,1, nsdiff(start,end));
 
-  MPTest("MPSharedHeapCtrTest()::inc", cnt, n, [ctr](int cnt) {
+  MPTest("int MPSharedHeapCtrTest()::inc", cnt, n, [ctr](int cnt) {
       int rc=0;
       MPCtrRefWorkInc(ctr,cnt,rc);
       return rc;
     } );
 
-  MPTest("MPSharedHeapCtrTest()::dec", cnt, n, [ctr](int cnt) {
+  MPTest("int MPSharedHeapCtrTest()::dec", cnt, n, [ctr](int cnt) {
       int rc=0;
       MPCtrRefWorkDec(ctr,cnt,rc);
       return rc;
     } );
 
-  MPTest("MPSharedHeapCtrTest()::val", cnt, n, [ctr](int cnt) {
+  MPTest("int MPSharedHeapCtrTest()::val", cnt, n, [ctr](int cnt) {
       int rc=0;
       MPCtrRefWorkVal(ctr,cnt,rc);
       return rc;
@@ -582,19 +582,19 @@ MPSharedHeapEbbCtrTest(int cnt, size_t n)
   MY_PRINT("RES: %s: MPSharedEbbCtr::Create() : %" PRId32 " %" PRIu64 "\n", 
 	   __PFUNC__,1, nsdiff(start,end));
 
-  MPTest("MPSharedHeapEbbCtrTest()::inc", cnt, n, [ctr](int cnt) {
+  MPTest("int MPSharedHeapEbbCtrTest()::inc", cnt, n, [ctr](int cnt) {
       int rc=0;
       MPCtrRefWorkInc(ctr,cnt,rc);
       return rc;
     } );
 
-  MPTest("MPSharedHeapEbbCtrTest()::dec", cnt, n, [ctr](int cnt) {
+  MPTest("int MPSharedHeapEbbCtrTest()::dec", cnt, n, [ctr](int cnt) {
       int rc=0;
       MPCtrRefWorkDec(ctr,cnt,rc);
       return rc;
     } );
 
-  MPTest("MPSharedHeapEbbCtrTest()::val", cnt, n, [ctr](int cnt) {
+  MPTest("int MPSharedHeapEbbCtrTest()::val", cnt, n, [ctr](int cnt) {
       int rc=0;
       MPCtrRefWorkVal(ctr,cnt,rc);
       return rc;
@@ -624,19 +624,19 @@ MPMultiHeapEbbCtrTest(int cnt, size_t n)
   MY_PRINT("RES: %s: MPMultiEbbCtr::Create() : %" PRId32 " %" PRIu64 "\n", 
 	   __PFUNC__,1, nsdiff(start,end));
 
-  MPTest("MPMultiHeapEbbCtrTest()::inc", cnt, n, [ctr](int cnt) {
+  MPTest("int MPMultiHeapEbbCtrTest()::inc", cnt, n, [ctr](int cnt) {
       int rc=0;
       MPCtrRefWorkInc(ctr,cnt,rc);
       return rc;
     } );
 
-  MPTest("MPMultiHeapEbbCtrTest()::dec", cnt, n, [ctr](int cnt) {
+  MPTest("int MPMultiHeapEbbCtrTest()::dec", cnt, n, [ctr](int cnt) {
       int rc=0;
       MPCtrRefWorkDec(ctr,cnt,rc);
       return rc;
     } );
 
-  MPTest("MPMultiHeapEbbCtrTest()::val", cnt, n, [ctr](int cnt) {
+  MPTest("int MPMultiHeapEbbCtrTest()::val", cnt, n, [ctr](int cnt) {
       int rc=0;
       MPCtrRefWorkVal(ctr,cnt,rc);
       return rc;

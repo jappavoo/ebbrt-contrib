@@ -1,0 +1,3 @@
+#!/bin/bash
+
+plotubench cpp 'ebbrt:ubench-ebbrt.out linuxN:ubench-linux_native.out' 'global:int.GlobalCtrTest stack:int.StackCtrTest heap:int.HeapCtrTest.*-.[idv] heapNew:int.HeapCtrTest.*new heapDelete:int.HeapCtrTest.*delete' 

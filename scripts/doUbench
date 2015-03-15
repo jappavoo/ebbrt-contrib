@@ -29,7 +29,7 @@ for ((i=0; i<$RUNS; i++)); do
      $EXEC -P $p -R $REPEAT -n;
      $EXEC -P $p -R $REPEAT -p;
      $EXEC -P $p -R $REPEAT -A 100 -s;
-     $EXEC -m --hoardthreadtest $p;
+     $EXEC -m -- hoardthreadtest $p;
    done;
 done > $LINUXOUT'
 EBBRTRUN='
@@ -41,7 +41,7 @@ for ((i=0; i<$RUNS; i++)); do
      $EXEC -B -P $p -R $REPEAT -n;
      $EXEC -B -P $p -R $REPEAT -p;
      $EXEC -B -P $p -R $REPEAT -A 100 -s;
-     $EXEC -B -m --hoardthreadtest $p;
+     $EXEC -B -m -- hoardthreadtest $p;
    done;
 done > $EBBRTOUT'
 

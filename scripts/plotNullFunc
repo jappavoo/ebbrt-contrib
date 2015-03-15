@@ -1,0 +1,10 @@
+#!/bin/bash
+
+
+procs=$(grep 'int.nullfunc_test' ubench-linux_native.out | grep RES | sed 's/.*n=//g;s/ .*$//g' | sort -n | uniq)
+bars='';
+for p in $procs; do
+bars="$bars $p:int.nullfunc_test.*n=$p.i="
+done
+#echo $bars
+plotubench nullfunc_test 'ebbrt:ubench-ebbrt.out linuxN:ubench-linux_native.out' "$bars"

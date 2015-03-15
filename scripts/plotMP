@@ -1,0 +1,11 @@
+#!/bin/bash
+
+procs=$(grep 'int.MPSharedHeapCtrTest' ubench-linux_native.out | grep '^RES.*n=' | sed 's/.*n=//g;s/ .*$//g' | sort -n | uniq)
+bars='';
+for p in $procs; do
+bars="$bars $p-shared-inc:int.MPSharedHeapCtrTest.*inc.*n=$p.i= $p-shared-dec:int.MPSharedHeapCtrTest.*dec.*n=$p.i= $p-shared-val:int.MPSharedHeapCtrTest.*val.*n=$p.i="
+bars="$bars $p-EbbShared-inc:int.MPSharedHeapEbbCtrTest.*inc.*n=$p.i= $p-EbbShared-dec:int.MPSharedHeapEbbCtrTest.*dec.*n=$p.i= $p-EbbShared-val:int.MPSharedHeapEbbCtrTest.*val.*n=$p.i="
+bars="$bars $p-EbbMulti-inc:int.MPMultiHeapEbbCtrTest.*inc.*n=$p.i= $p-EbbMulti-dec:int.MPMultiHeapEbbCtrTest.*dec.*n=$p.i= $p-EbbMulti-val:int.MPMultiHeapEbbCtrTest.*val.*n=$p.i="
+done
+#echo $bars
+plotubench mp_test-ctrs 'ebbrt:ubench-ebbrt.out linuxN:ubench-linux_native.out' "$bars"

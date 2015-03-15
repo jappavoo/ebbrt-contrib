@@ -1,0 +1,19 @@
+#!/bin/bash
+#set -x
+
+procs=$(grep 'int.spawnNullLocalTest' ubench-linux_native.out | grep '^RES.*n=' | sed 's/.*n=//g;s/ .*$//g' | sort -n | uniq)
+bars='';
+for p in $procs; do
+bars="$bars $p:int.spawnNullLocalTest.*n=$p.i="
+done
+#echo $bars
+plotubench spawn_test-NullLocal 'ebbrt:ubench-ebbrt.out linuxN:ubench-linux_native.out' "$bars"
+
+procs=$(grep 'int.spawnNullRemoteTest' ubench-linux_native.out | grep '^RES.*n=' | sed 's/.*n=//g;s/ .*$//g' | sort -n | uniq)
+bars='';
+for p in $procs; do
+bars="$bars $p:int.spawnNullRemoteTest.*n=$p.i="
+done
+#echo $bars
+plotubench spawn_test-NullRemote 'ebbrt:ubench-ebbrt.out linuxN:ubench-linux_native.out' "$bars"
+

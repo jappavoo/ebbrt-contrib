@@ -1,0 +1,13 @@
+#!/bin/bash
+#set -x
+
+procs=$(grep 'int.hoard_threadtest' ubench-linux_native.out | grep '^RES.*n=' | sed 's/.*n=//g;s/ .*$//g' | sort -n | uniq)
+bars='';
+for p in $procs; do
+bars="$bars $p:int.hoard_threadtest.*n=$p.i="
+done
+#echo $bars
+plotubench hoard_threadtest 'ebbrt:ubench-ebbrt.out linuxN:ubench-linux_native.out' "$bars"
+
+
+
