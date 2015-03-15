@@ -10,3 +10,4 @@ Release:
 	$(MAKE) -C hosted/build/Release 
 Debug:
 	$(MAKE) -C hosted/build/Debug 
+
