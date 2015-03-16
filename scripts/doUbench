@@ -27,9 +27,12 @@ EBBRTOUT=ubench-ebbrt.out
 RUNDIR=/home/don/kh/runs/current/run
 DONEFILE=DONE_$$_$TS
 KH=/opt/khpy/kh 
-VMKERNEL=/dev/null
-VMINITRD=/dev/null
+VMKERNEL=vmkernel
+VMINITRD=vminitrd
 VMEXEC=/root/$(basename $EXEC)
+VMIMGDIR=vmimgs
+VMSRCKERNEL=/opt/ubench/vmimgs/vmlinuz-3.16.0-4-amd64
+VMSRCINITRD=/opt/ubench/vmimgs/debirf-minimal_jessie_3.16.0-4-amd64.cgz  
 
 # THE ACTUAL EXPERIMENT COMMANDS
 LINUXNRUN='
@@ -49,20 +52,20 @@ LINUXVMRUN="
 export EBBRT_NODE_ALLOCATOR_DEFAULT_CPUS=\$MAXPROCESSORS;
 NETID=\$($KH network | sed -n \"1 p\");
 for ((i=0; i<\$RUNS; i++)); do 
-   $KH alloc -s --cpu=\$MAXPROCESSORS --cmd=\"-append \\\"EXPCMD='$VMEXEC -R $REPEAT -c'\\\"\" \$NETID \$VMKERNEL \$VMINITRD > khout;
+   $KH alloc -s --cpu=\$MAXPROCESSORS --cmd=\"-append \\\"console=ttyS0 ro 1 quiet EXPCMD='$VMEXEC -R $REPEAT -c'\\\"\" \$NETID \$VMKERNEL \$VMINITRD > khout;
    node=\$(head -1 khout); fin=\$(grep finish khout); out=\$(grep stdout khout); cat \$fin; cat \$out; $KH rmnode \$node;
-   $KH alloc -s --cpu=\$MAXPROCESSORS --cmd=\"-append \\\"EXPCMD='$VMEXEC -R $REPEAT -e'\\\"\" \$NETID \$VMKERNEL \$VMINITRD > khout;
+   $KH alloc -s --cpu=\$MAXPROCESSORS --cmd=\"-append \\\"console=ttyS0 ro 1 quiet EXPCMD='$VMEXEC -R $REPEAT -e'\\\"\" \$NETID \$VMKERNEL \$VMINITRD > khout;
    node=\$(head -1 khout); fin=\$(grep finish khout); out=\$(grep stdout khout); cat \$fin; cat \$out; $KH rmnode \$node;
   for ((p=1; p<=$MAXPROCESSORS; p++)); do  
-     $KH alloc -s --cpu=\$MAXPROCESSORS --cmd=\"-append \\\"EXPCMD='$VMEXEC -P $p -R $REPEAT -t'\\\"\" \$NETID \$VMKERNEL \$VMINITRD > khout;
+     $KH alloc -s --cpu=\$MAXPROCESSORS --cmd=\"-append \\\"console=ttyS0 ro 1 quiet EXPCMD='$VMEXEC -P \$p -R $REPEAT -t'\\\"\" \$NETID \$VMKERNEL \$VMINITRD > khout;
      node=\$(head -1 khout); fin=\$(grep finish khout); out=\$(grep stdout khout); cat \$fin; cat \$out; $KH rmnode \$node;
-     $KH alloc -s --cpu=\$MAXPROCESSORS --cmd=\"-append \\\"EXPCMD='$VMEXEC -P $p -R $REPEAT -n'\\\"\" \$NETID \$VMKERNEL \$VMINITRD > khout;
+     $KH alloc -s --cpu=\$MAXPROCESSORS --cmd=\"-append \\\"console=ttyS0 ro 1 quiet EXPCMD='$VMEXEC -P \$p -R $REPEAT -n'\\\"\" \$NETID \$VMKERNEL \$VMINITRD > khout;
      node=\$(head -1 khout); fin=\$(grep finish khout); out=\$(grep stdout khout); cat \$fin; cat \$out; $KH rmnode \$node;
-     $KH alloc -s --cpu=\$MAXPROCESSORS --cmd=\"-append \\\"EXPCMD='$VMEXEC -P $p -R $REPEAT -p'\\\"\" \$NETID \$VMKERNEL \$VMINITRD > khout;
+     $KH alloc -s --cpu=\$MAXPROCESSORS --cmd=\"-append \\\"console=ttyS0 ro 1 quiet EXPCMD='$VMEXEC -P \$p -R $REPEAT -p'\\\"\" \$NETID \$VMKERNEL \$VMINITRD > khout;
      node=\$(head -1 khout); fin=\$(grep finish khout); out=\$(grep stdout khout); cat \$fin; cat \$out; $KH rmnode \$node;
-     $KH alloc -s --cpu=\$MAXPROCESSORS --cmd=\"-append \\\"EXPCMD='$VMEXEC -P $p -R $REPEAT -A 100 -s'\\\"\" \$NETID \$VMKERNEL \$VMINITRD > khout;
+     $KH alloc -s --cpu=\$MAXPROCESSORS --cmd=\"-append \\\"console=ttyS0 ro 1 quiet EXPCMD='$VMEXEC -P \$p -R $REPEAT -A 100 -s'\\\"\" \$NETID \$VMKERNEL \$VMINITRD > khout;
      node=\$(head -1 khout); fin=\$(grep finish khout); out=\$(grep stdout khout); cat \$fin; cat \$out; $KH rmnode \$node;
-     $KH alloc -s --cpu=\$MAXPROCESSORS --cmd=\"-append \\\"EXPCMD='$VMEXEC -m -- hoardthreadtest $p'\\\"\" \$NETID \$VMKERNEL \$VMINITRD > khout;
+     $KH alloc -s --cpu=\$MAXPROCESSORS --cmd=\"-append \\\"console=ttyS0 ro 1 quiet EXPCMD='$VMEXEC -m -- hoardthreadtest \$p'\\\"\" \$NETID \$VMKERNEL \$VMINITRD > khout;
      node=\$(head -1 khout); fin=\$(grep finish khout); out=\$(grep stdout khout); cat \$fin; cat \$out; $KH rmnode \$node;
   done;
 done > \$LINUXVMOUT; $KH clean"
@@ -200,6 +203,26 @@ function expWait()
   done
 }
 
+function mkVMImg()
+{
+ [[ ! -a $VMIMGDIR ]] && mkdir -p $VMIMGDIR
+ dir=$(tempfile -d $VMIMGDIR).dir
+ cp $VMSRCKERNEL $VMKERNEL
+ mkdir $dir
+ gunzip -c $VMSRCINITRD | (cd $dir; sudo cpio -i)
+ mkdir $dir/rootfs
+ gunzip -c $dir/rootfs.cgz | (cd $dir/rootfs; sudo cpio -id)
+
+ deps="$(ldd $EXEC |while read line; do line=${line#*/}; echo /${line%% *}; done | grep -v 'linux-vdso.so')"
+ files="$EXEC $deps"
+ sudo cp -aL -t $dir/rootfs/root $files 
+
+ (cd $dir/rootfs; sudo find . | sudo cpio --create --format='newc' | sudo gzip -c > ../rootfs.cgz)
+ sudo rm -rf $dir/roofs 
+ (cd $dir; sudo find . | sudo cpio --create --format='newc' | sudo gzip -c) > $VMINITRD
+ sudo rm -rf ${dir%%.dir} $dir
+}
+
 DODON=$1
 
 if [[ -z $EXP_SKIPMAKE ]]; then
@@ -209,6 +232,15 @@ fi
 
 if [[ ! -a $EXEC ]]; then
   echo "FAILED to make $EXEC"
+  exit -1
+fi
+
+if [[ -z $EXP_SKIPMKVMIMG ]]; then
+  mkVMImg
+fi
+
+if [[ ! -a $VMKERNEL || ! -a $VMINITRD ]]; then
+  echo "FAILED to find $VMKERNEL or $VMINITRD"
   exit -1
 fi
 
@@ -240,8 +272,8 @@ if [[ -n $DODON ]]; then
     copyOutputs
 else
     eval $LINUXNRUN
-    #eval $LINUXVMRUN
     eval $EBBRTRUN
+    eval $LINUXVMRUN
 fi
 
 echo "MAKING PLOTS"
