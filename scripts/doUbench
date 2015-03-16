@@ -21,13 +21,18 @@ DONEXPPTR=/home/don/kh/experiment/current
 TS="$(date +%s)"
 SESSION=myDONlock_$$_$TS
 EXTRAFILES="apps/ubench/hosted/build/Release/bm"
-LINUXOUT=ubench-linux_native.out
+LINUXNOUT=ubench-linux_native.out
+LINUXVMOUT=ubench-linux_VM.out
 EBBRTOUT=ubench-ebbrt.out
 RUNDIR=/home/don/kh/runs/current/run
 DONEFILE=DONE_$$_$TS
+KH=/opt/khpy/kh 
+VMKERNEL=/dev/null
+VMINITRD=/dev/null
+VMEXEC=/root/$(basename $EXEC)
 
 # THE ACTUAL EXPERIMENT COMMANDS
-LINUXRUN='
+LINUXNRUN='
 export EBBRT_NODE_ALLOCATOR_DEFAULT_CPUS=$MAXPROCESSORS;
 for ((i=0; i<$RUNS; i++)); do 
    $EXEC -R $REPEAT -c;
@@ -39,7 +44,28 @@ for ((i=0; i<$RUNS; i++)); do
      $EXEC -P $p -R $REPEAT -A 100 -s;
      $EXEC -m -- hoardthreadtest $p;
    done;
-done > $LINUXOUT'
+done > $LINUXNOUT'
+LINUXVMRUN="
+export EBBRT_NODE_ALLOCATOR_DEFAULT_CPUS=\$MAXPROCESSORS;
+NETID=\$($KH network | sed -n \"1 p\");
+for ((i=0; i<\$RUNS; i++)); do 
+   $KH alloc -s --cpu=\$MAXPROCESSORS --cmd=\"-append \\\"EXPCMD='$VMEXEC -R $REPEAT -c'\\\"\" \$NETID \$VMKERNEL \$VMINITRD > khout;
+   node=\$(head -1 khout); fin=\$(grep finish khout); out=\$(grep stdout khout); cat \$fin; cat \$out; $KH rmnode \$node;
+   $KH alloc -s --cpu=\$MAXPROCESSORS --cmd=\"-append \\\"EXPCMD='$VMEXEC -R $REPEAT -e'\\\"\" \$NETID \$VMKERNEL \$VMINITRD > khout;
+   node=\$(head -1 khout); fin=\$(grep finish khout); out=\$(grep stdout khout); cat \$fin; cat \$out; $KH rmnode \$node;
+  for ((p=1; p<=$MAXPROCESSORS; p++)); do  
+     $KH alloc -s --cpu=\$MAXPROCESSORS --cmd=\"-append \\\"EXPCMD='$VMEXEC -P $p -R $REPEAT -t'\\\"\" \$NETID \$VMKERNEL \$VMINITRD > khout;
+     node=\$(head -1 khout); fin=\$(grep finish khout); out=\$(grep stdout khout); cat \$fin; cat \$out; $KH rmnode \$node;
+     $KH alloc -s --cpu=\$MAXPROCESSORS --cmd=\"-append \\\"EXPCMD='$VMEXEC -P $p -R $REPEAT -n'\\\"\" \$NETID \$VMKERNEL \$VMINITRD > khout;
+     node=\$(head -1 khout); fin=\$(grep finish khout); out=\$(grep stdout khout); cat \$fin; cat \$out; $KH rmnode \$node;
+     $KH alloc -s --cpu=\$MAXPROCESSORS --cmd=\"-append \\\"EXPCMD='$VMEXEC -P $p -R $REPEAT -p'\\\"\" \$NETID \$VMKERNEL \$VMINITRD > khout;
+     node=\$(head -1 khout); fin=\$(grep finish khout); out=\$(grep stdout khout); cat \$fin; cat \$out; $KH rmnode \$node;
+     $KH alloc -s --cpu=\$MAXPROCESSORS --cmd=\"-append \\\"EXPCMD='$VMEXEC -P $p -R $REPEAT -A 100 -s'\\\"\" \$NETID \$VMKERNEL \$VMINITRD > khout;
+     node=\$(head -1 khout); fin=\$(grep finish khout); out=\$(grep stdout khout); cat \$fin; cat \$out; $KH rmnode \$node;
+     $KH alloc -s --cpu=\$MAXPROCESSORS --cmd=\"-append \\\"EXPCMD='$VMEXEC -m -- hoardthreadtest $p'\\\"\" \$NETID \$VMKERNEL \$VMINITRD > khout;
+     node=\$(head -1 khout); fin=\$(grep finish khout); out=\$(grep stdout khout); cat \$fin; cat \$out; $KH rmnode \$node;
+  done;
+done > \$LINUXVMOUT; $KH clean"
 EBBRTRUN='
 export EBBRT_NODE_ALLOCATOR_DEFAULT_CPUS=$MAXPROCESSORS;
 for ((i=0; i<$RUNS; i++)); do 
@@ -112,11 +138,17 @@ RUNS=$RUNS
 REPEAT=$REPEAT
 MAXPROCESSORS=$MAXPROCESSORS
 EXEC=\$APPDIR/$(basename $EXEC)
-LINUXOUT=\$RUNDIR/$LINUXOUT
+KH=$KH
+VMKERNEL=$VMKERNEL
+VMINITRD=$VMINITRD
+VMEXEC=$VMEXEC
+LINUXNOUT=\$RUNDIR/$LINUXNOUT
+LINUXVMOUT=\$RUNDIR/$LINUXVMOUT
 EBBRTOUT=\$RUNDIR/$EBBRTOUT
 export LD_LIBRARY_PATH=/home/kh/opt/lib/:\$APPDIR
 
-$LINUXRUN
+$LINUXNRUN
+$LINUXVMRUN
 $EBBRTRUN
 
 touch \$RUNDIR/$DONEFILE
@@ -207,9 +239,12 @@ if [[ -n $DODON ]]; then
     releaseExpLock
     copyOutputs
 else
-    eval $LINUXRUN
+    eval $LINUXNRUN
+    #eval $LINUXVMRUN
     eval $EBBRTRUN
 fi
 
 echo "MAKING PLOTS"
-plotAll
+if [[ -z $EXP_SKIPPLOT ]]; then
+  plotAll
+fi
