@@ -7,7 +7,7 @@ for p in $procs; do
 bars="$bars $p:int.hoard_threadtest.*n=$p.i="
 done
 #echo $bars
-plotubench hoard_threadtest 'ebbrt:ubench-ebbrt.out linuxN:ubench-linux_native.out' "$bars"
+plotubench hoard_threadtest 'ebbrt:ubench-ebbrt.out linuxN:ubench-linux_native.out linuxVM:ubench-linux_VM.out' "$bars"
 
 
 

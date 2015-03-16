@@ -7,4 +7,4 @@ for p in $procs; do
 bars="$bars $p:int.nullfunc_test.*n=$p.i="
 done
 #echo $bars
-plotubench nullfunc_test 'ebbrt:ubench-ebbrt.out linuxN:ubench-linux_native.out' "$bars"
+plotubench nullfunc_test 'ebbrt:ubench-ebbrt.out linuxN:ubench-linux_native.out linuxVM:ubench-linux_VM.out' "$bars"

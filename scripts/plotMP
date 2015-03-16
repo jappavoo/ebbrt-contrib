@@ -8,4 +8,4 @@ bars="$bars $p-EbbShared-inc:int.MPSharedHeapEbbCtrTest.*inc.*n=$p.i= $p-EbbShar
 bars="$bars $p-EbbMulti-inc:int.MPMultiHeapEbbCtrTest.*inc.*n=$p.i= $p-EbbMulti-dec:int.MPMultiHeapEbbCtrTest.*dec.*n=$p.i= $p-EbbMulti-val:int.MPMultiHeapEbbCtrTest.*val.*n=$p.i="
 done
 #echo $bars
-plotubench mp_test-ctrs 'ebbrt:ubench-ebbrt.out linuxN:ubench-linux_native.out' "$bars"
+plotubench mp_test-ctrs 'ebbrt:ubench-ebbrt.out linuxN:ubench-linux_native.out linuxVM:ubench-linux_VM.out' "$bars"
