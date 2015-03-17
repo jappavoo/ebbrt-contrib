@@ -247,15 +247,16 @@ if [[ -n $DODON ]]; then
     RUNS=$DONRUNS
     REPEAT=$DONREPEAT
 
+if [[ -z $EXP_DRYRUN ]]; then
     if ! acquireExpLock; then
-	echo "FAILED TO GET LOCK ON DON"
- exit -1
-   fi
+    	echo "FAILED TO GET LOCK ON DON"
+      exit -1
+    fi
 
     if [[ -n $EXP_MONITOR ]]; then 
        xterm -e "screen -r $SESSION" &
     fi
-
+fi
     mkDonDir
     copyFiles
     mkExpBoot
@@ -263,18 +264,21 @@ if [[ -n $DODON ]]; then
     mkExpStop
     mkExpLinks
     setExp
+if [[ -z $EXP_DRYRUN ]]; then
     startExp
     expWait
-
     releaseExpLock
     copyOutputs
+fi
 else
     eval $LINUXNRUN
     eval $EBBRTRUN
     eval $LINUXVMRUN
 fi
 
-if [[ -z $EXP_SKIPPLOT ]]; then
-  echo "MAKING PLOTS"
-  plotAll
+if [[ -z $EXP_DRYRUN ]]; then
+  if [[ -z $EXP_SKIPPLOT ]]; then
+    echo "MAKING PLOTS"
+    plotAll
+  fi
 fi
