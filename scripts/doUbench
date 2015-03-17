@@ -229,15 +229,12 @@ DODON=$1
 if [[ -z $EXP_SKIPMAKE ]]; then
   echo "making  $EXEC"
   make -C apps/ubench/hosted/build -j8
+  mkVMImg
 fi
 
 if [[ ! -a $EXEC ]]; then
   echo "FAILED to make $EXEC"
   exit -1
-fi
-
-if [[ -z $EXP_SKIPMKVMIMG ]]; then
-  mkVMImg
 fi
 
 if [[ ! -a $VMKERNEL || ! -a $VMINITRD ]]; then
