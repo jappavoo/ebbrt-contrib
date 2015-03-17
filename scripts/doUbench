@@ -52,18 +52,18 @@ LINUXVMRUN="
 export EBBRT_NODE_ALLOCATOR_DEFAULT_CPUS=\$MAXPROCESSORS;
 NETID=\$($KH network | sed -n \"1 p\");
 for ((i=0; i<\$RUNS; i++)); do 
-   $KH alloc -s --cpu=\$MAXPROCESSORS --cmd=\"-append \\\"console=ttyS0 ro 1 quiet EXPCMD='$VMEXEC -R $REPEAT -c'\\\"\" \$NETID \$VMKERNEL \$VMINITRD > khout;
+   $KH alloc -s --cpu=\$MAXPROCESSORS --cmd=\"-append \\\"console=ttyS0 ro 1 quiet EXPCMD='$VMEXEC -R \$REPEAT -c'\\\"\" \$NETID \$VMKERNEL \$VMINITRD > khout;
    node=\$(head -1 khout); fin=\$(grep finish khout); out=\$(grep stdout khout); cat \$fin; cat \$out; $KH rmnode \$node;
-   $KH alloc -s --cpu=\$MAXPROCESSORS --cmd=\"-append \\\"console=ttyS0 ro 1 quiet EXPCMD='$VMEXEC -R $REPEAT -e'\\\"\" \$NETID \$VMKERNEL \$VMINITRD > khout;
+   $KH alloc -s --cpu=\$MAXPROCESSORS --cmd=\"-append \\\"console=ttyS0 ro 1 quiet EXPCMD='$VMEXEC -R \$REPEAT -e'\\\"\" \$NETID \$VMKERNEL \$VMINITRD > khout;
    node=\$(head -1 khout); fin=\$(grep finish khout); out=\$(grep stdout khout); cat \$fin; cat \$out; $KH rmnode \$node;
-  for ((p=1; p<=$MAXPROCESSORS; p++)); do  
-     $KH alloc -s --cpu=\$MAXPROCESSORS --cmd=\"-append \\\"console=ttyS0 ro 1 quiet EXPCMD='$VMEXEC -P \$p -R $REPEAT -t'\\\"\" \$NETID \$VMKERNEL \$VMINITRD > khout;
+  for ((p=1; p<=\$MAXPROCESSORS; p++)); do  
+     $KH alloc -s --cpu=\$MAXPROCESSORS --cmd=\"-append \\\"console=ttyS0 ro 1 quiet EXPCMD='$VMEXEC -P \$p -R \$REPEAT -t'\\\"\" \$NETID \$VMKERNEL \$VMINITRD > khout;
      node=\$(head -1 khout); fin=\$(grep finish khout); out=\$(grep stdout khout); cat \$fin; cat \$out; $KH rmnode \$node;
-     $KH alloc -s --cpu=\$MAXPROCESSORS --cmd=\"-append \\\"console=ttyS0 ro 1 quiet EXPCMD='$VMEXEC -P \$p -R $REPEAT -n'\\\"\" \$NETID \$VMKERNEL \$VMINITRD > khout;
+     $KH alloc -s --cpu=\$MAXPROCESSORS --cmd=\"-append \\\"console=ttyS0 ro 1 quiet EXPCMD='$VMEXEC -P \$p -R \$REPEAT -n'\\\"\" \$NETID \$VMKERNEL \$VMINITRD > khout;
      node=\$(head -1 khout); fin=\$(grep finish khout); out=\$(grep stdout khout); cat \$fin; cat \$out; $KH rmnode \$node;
-     $KH alloc -s --cpu=\$MAXPROCESSORS --cmd=\"-append \\\"console=ttyS0 ro 1 quiet EXPCMD='$VMEXEC -P \$p -R $REPEAT -p'\\\"\" \$NETID \$VMKERNEL \$VMINITRD > khout;
+     $KH alloc -s --cpu=\$MAXPROCESSORS --cmd=\"-append \\\"console=ttyS0 ro 1 quiet EXPCMD='$VMEXEC -P \$p -R \$REPEAT -p'\\\"\" \$NETID \$VMKERNEL \$VMINITRD > khout;
      node=\$(head -1 khout); fin=\$(grep finish khout); out=\$(grep stdout khout); cat \$fin; cat \$out; $KH rmnode \$node;
-     $KH alloc -s --cpu=\$MAXPROCESSORS --cmd=\"-append \\\"console=ttyS0 ro 1 quiet EXPCMD='$VMEXEC -P \$p -R $REPEAT -A 100 -s'\\\"\" \$NETID \$VMKERNEL \$VMINITRD > khout;
+     $KH alloc -s --cpu=\$MAXPROCESSORS --cmd=\"-append \\\"console=ttyS0 ro 1 quiet EXPCMD='$VMEXEC -P \$p -R \$REPEAT -A 100 -s'\\\"\" \$NETID \$VMKERNEL \$VMINITRD > khout;
      node=\$(head -1 khout); fin=\$(grep finish khout); out=\$(grep stdout khout); cat \$fin; cat \$out; $KH rmnode \$node;
      $KH alloc -s --cpu=\$MAXPROCESSORS --cmd=\"-append \\\"console=ttyS0 ro 1 quiet EXPCMD='$VMEXEC -m -- hoardthreadtest \$p'\\\"\" \$NETID \$VMKERNEL \$VMINITRD > khout;
      node=\$(head -1 khout); fin=\$(grep finish khout); out=\$(grep stdout khout); cat \$fin; cat \$out; $KH rmnode \$node;
