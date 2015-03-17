@@ -820,9 +820,9 @@ int timing_test(struct Arguments *args) {
   return 1;
 }
 
-void __attribute ((noinline)) nullfunc(void)
+void nullfunc(void)
 {
-  asm ("");
+  asm volatile ("");
 }
 
 int nullfunc_test(struct Arguments *args) {
