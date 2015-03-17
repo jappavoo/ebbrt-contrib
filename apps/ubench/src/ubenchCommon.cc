@@ -812,7 +812,9 @@ int timing_test(struct Arguments *args) {
   for (int i=0; i<rcnt; i++) {
     MPTest(__PFUNC__, acnt, n, [](int acnt) {
 	int j;
-	for (j=0; j<acnt; j++) now();
+	for (j=0; j<acnt; j++) {
+	  asm volatile (" ");
+	}
 	return j;
       });
   }
