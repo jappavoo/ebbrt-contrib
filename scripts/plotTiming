@@ -1,9 +1,15 @@
 #!/bin/bash
-
+#set -x
+sizes="1000"
+#sizes="1000 2000 4000 8000 16000 10000000"
 procs=$(grep 'int.timing_test' ubench-linux_native.out | grep RES | sed 's/.*n=//g;s/ .*$//g' | sort -n | uniq)
-bars='';
-for p in $procs; do
-bars="$bars $p:int.timing_test.*n=$p.i="
+
+for s in $sizes
+do 
+  bars='';
+  for p in $procs; do
+    bars="$bars $p:int.timing_test.*n=$p.i=.*:.$s[[:space:]]"
+  done
+  #echo $bars
+  plotubench timing_test_$s 'ebbrt:ubench-ebbrt.out linuxN:ubench-linux_native.out linuxVM:ubench-linux_VM.out' "$bars"
 done
-#echo $bars
-plotubench timing_test 'ebbrt:ubench-ebbrt.out linuxN:ubench-linux_native.out linuxVM:ubench-linux_VM.out' "$bars"
