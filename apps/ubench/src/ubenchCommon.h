@@ -38,14 +38,18 @@ struct MainArgs {
 
 extern struct MainArgs margs;
 
+#define USE_RDTSC
+
+#ifndef USE_RDTSC
+
 #ifndef __EBBRT_BM__
 typedef std::chrono::high_resolution_clock myclock;
 #else
 #include <ebbrt/Clock.h>
 typedef ebbrt::clock::Wall myclock;
 #endif
-
 typedef std::chrono::time_point<myclock> tp;
+
 static inline tp now() { return myclock::now(); }
 
 static inline uint64_t
@@ -54,5 +58,37 @@ nsdiff(tp start, tp end)
   return std::chrono::duration_cast<std::chrono::nanoseconds>
   (end-start).count();
 }
+
+#else
+
+static inline uint64_t
+rdtsc(void) 
+{
+  uint32_t a,d;
+
+  __asm__ __volatile__("rdtsc" : "=a" (a), "=d" (d));
+  return ((uint64_t)a) | (((uint64_t)d) << 32);
+}
+
+static inline uint64_t
+rdtscp(void) 
+{
+  uint32_t a,d;
+
+  __asm__ __volatile__("rdtscp" : "=a" (a), "=d" (d));
+  return ((uint64_t)a) | (((uint64_t)d) << 32);
+}
+
+typedef uint64_t tp;
+
+static inline tp now() { return rdtscp(); }
+
+static inline uint64_t
+nsdiff(tp start, tp end)
+{
+  return (end-start);
+}
+
+#endif
 
 #endif
