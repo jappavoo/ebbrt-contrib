@@ -20,8 +20,9 @@ bootimgargs_test(struct Arguments *args)
   {
     int argc;
     char **argv;
-    char *img_cmdline = (char *)ebbrt::multiboot::cmdline_addr_;
-    
+    auto *img_cmdline =
+        reinterpret_cast<char *>(ebbrt::multiboot::cmdline_addr_);
+
     if (img_cmdline)  ebbrt::kprintf("ubench: BEGIN: %s\n", img_cmdline);
 
     if (img_cmdline) {

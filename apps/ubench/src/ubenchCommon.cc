@@ -43,11 +43,11 @@
 int  bootimgargs_test(struct Arguments *);
 #endif
 
-#include <ebbrt/SharedEbb.h>
-#include <ebbrt/MulticoreEbb.h>
-#include <ebbrt/SpinBarrier.h>
 #include <ebbrt/CacheAligned.h>
 #include <ebbrt/Clock.h>
+#include <ebbrt/MulticoreEbb.h>
+#include <ebbrt/SharedEbb.h>
+#include <ebbrt/SpinBarrier.h>
 #include "Unix.h"
 #include "ubenchCommon.h"
 
@@ -90,7 +90,7 @@ MPTest(const char *name, int cnt, size_t n,
     ebbrt::event_manager->SpawnRemote([i,n,&context,theCpu,&count,
 				       &work,cnt]() {
       uint64_t ns;
-      Timer tmr;
+      MyTimer tmr;
       int rc;
       bar.Wait();
       ns_start(tmr);
@@ -162,13 +162,13 @@ public:
     delete this;
   }
 
-  static EbbCtrRef Create(EbbId id=ebb_allocator->Allocate()) {
+  static EbbCtrRef Create(EbbId id=ebb_allocator->AllocateLocal()) {
     return SharedEbb<EbbCtr>::Create(new EbbCtr, id);
   }
 
   static EbbCtrRef GlobalCtr() {
     static EbbCtr theGlobalCtr;
-    static EbbId theId = ebb_allocator->Allocate();
+    static EbbId theId = ebb_allocator->AllocateLocal();
     static EbbCtrRef theRef = 
       SharedEbb<EbbCtr>::Create(&theGlobalCtr, theId); 
     return theRef;
@@ -193,13 +193,13 @@ public:
     delete this;
   }
 
-  static MPSharedEbbCtrRef Create(EbbId id=ebb_allocator->Allocate()) {
+  static MPSharedEbbCtrRef Create(EbbId id=ebb_allocator->AllocateLocal()) {
     return SharedEbb<MPSharedEbbCtr>::Create(new MPSharedEbbCtr, id);
   }
 
   static MPSharedEbbCtrRef GlobalCtr() {
     static MPSharedEbbCtr theGlobalCtr;
-    static EbbId theId = ebb_allocator->Allocate();
+    static EbbId theId = ebb_allocator->AllocateLocal();
     static MPSharedEbbCtrRef theRef = 
       SharedEbb<MPSharedEbbCtr>::Create(&theGlobalCtr, theId); 
     return theRef;
@@ -249,7 +249,7 @@ public:
 
   void destroy()  { _root.destroy(); }
   
-  static MPMultiEbbCtrRef Create(EbbId id=ebb_allocator->Allocate()) {
+  static MPMultiEbbCtrRef Create(EbbId id=ebb_allocator->AllocateLocal()) {
     return Parent::Create(new Root(id), id);
   }
 };
@@ -310,7 +310,7 @@ VirtualCtr VirtualGlobalCtr;
 #define CtrWork(CTR,CNT,SUM)			\
   {						\
     int rc = 0;					\
-    Timer tmr; uint64_t ns;	\
+    MyTimer tmr; uint64_t ns;	\
     int i;					\
     ns_start(tmr);				\
     for (i=0; i<cnt; i++) {			\
@@ -346,38 +346,38 @@ VirtualCtr VirtualGlobalCtr;
 #define CtrRefWork(CTR,CNT,SUM)			\
   {						\
   int rc = 0;					\
-  tp start, end;				\
+  MyTimer tmr; uint64_t ns;	\
   int i;					\
-  start = now();				\
+  ns_start(tmr);				\
   for (i=0; i<CNT; i++) {			\
     CTR->inc();					\
   }						\
   SUM+=i;					\
-  end = now();					\
+  ns = ns_stop(tmr);					\
   MY_PRINT("RES: %s: " #CTR "->inc(): %"	\
 	   PRId32 " %" PRIu64 "\n",  __PFUNC__,		\
-	   CNT, nsdiff(start,end));			\
+	   CNT, ns);			\
   							\
-  start = now();				\
+  ns_start(tmr);				\
   for (i=0; i<CNT; i++) {			\
     CTR->dec();					\
   }						\
   SUM+=i;					\
-  end = now();					\
+  ns = ns_stop(tmr);					\
   MY_PRINT("RES: %s: " #CTR "->dec(): %"	\
           PRId32 " %" PRIu64 "\n", __PFUNC__,	\
-	   CNT, nsdiff(start,end));		\
+	   CNT, ns);		\
   rc=0;						\
-  start = now();				\
+  ns_start(tmr);				\
   for (i=0; i<CNT; i++) {			\
     rc += CTR->val();				\
   }						\
   SUM+=rc;					\
-  end = now();					\
+  ns = ns_stop(tmr);					\
   assert(rc==0);				\
   MY_PRINT("RES: %s: " #CTR "->val(): %"	\
 	  PRId32 " %" PRIu64 "\n", __PFUNC__,	\
-	   CNT, nsdiff(start,end));	\
+	   CNT, ns);	\
   }
 
 
@@ -436,7 +436,7 @@ int
 HeapCtrTest(int cnt)
 {  
   int rc=0;
-  uint64_t ns; Timer tmr;
+  uint64_t ns; MyTimer tmr;
 
   ns_start(tmr);
   Ctr *heapCtr = new Ctr;
@@ -448,12 +448,12 @@ HeapCtrTest(int cnt)
 
   CtrRefWork(heapCtr,cnt,rc);
 
-  start = now();
+  ns_start(tmr);
   delete heapCtr;
-  end = now();
+  ns = ns_stop(tmr);
 
   MY_PRINT("RES: %s: delete Ctr: %" PRId32 " %" PRIu64 "\n", 
-	   __PFUNC__,1, nsdiff(start,end));
+	   __PFUNC__,1, ns);
   return rc;
 
 }
@@ -463,25 +463,25 @@ int
 VirtualHeapCtrTest(int cnt)
 {  
   int rc=0;
-  tp start, end;
+  uint64_t ns; MyTimer tmr;
 
-  start = now();
+  ns_start(tmr);
   VirtualCtr *virtHeapCtr = new VirtualCtr;
-  end = now();
+  ns = ns_stop(tmr);
   assert(virtHeapCtr!=NULL);
 
   MY_PRINT("RES: %s: new VirtualCtr: %" PRId32 " %" PRIu64 "\n", 
-	   __PFUNC__,1, nsdiff(start,end));
+	   __PFUNC__,1, ns);
 
   CtrRefWork(virtHeapCtr,cnt,rc);
 
-  start = now();
+  ns_start(tmr);
   delete virtHeapCtr;
-  end = now();
+  ns = ns_stop(tmr);
   assert(virtHeapCtr!=NULL);
 
   MY_PRINT("RES: %s: delete VirtualCtr: %" PRId32 " %" PRIu64 "\n", 
-	   __PFUNC__,1, nsdiff(start,end));
+	   __PFUNC__,1, ns);
   return rc;
 }
 
@@ -489,15 +489,15 @@ VirtualHeapCtrTest(int cnt)
 int
 MPSharedHeapCtrTest(int cnt, size_t n)
 {
-  tp start, end;
+  uint64_t ns; MyTimer tmr;
 
-  start = now();
+  ns_start(tmr);
   MPSharedCtr *ctr = new MPSharedCtr;
-  end = now();
+  ns = ns_stop(tmr);
   assert(ctr!=NULL);
 
   MY_PRINT("RES: %s: new MPSharedCtr: %" PRId32 " %" PRIu64 "\n", 
-	   __PFUNC__,1, nsdiff(start,end));
+	   __PFUNC__,1, ns);
 
   MPTest("int MPSharedHeapCtrTest()::inc", cnt, n, [ctr](int cnt) {
       int rc=0;
@@ -517,12 +517,12 @@ MPSharedHeapCtrTest(int cnt, size_t n)
       return rc;
     } );
 
-  start = now();
+  ns_start(tmr);
   delete ctr;
-  end = now();
+  ns = ns_stop(tmr);
 
   MY_PRINT("RES: %s: delete MPSharedCtr: %" PRId32 " %" PRIu64 "\n", 
-	   __PFUNC__,1, nsdiff(start,end));
+	   __PFUNC__,1, ns);
   return 1;
 }
 
@@ -530,15 +530,15 @@ int
 GlobalEbbCtrTest(int cnt)
 {
   int rc=0;
-  tp start, end;
+  uint64_t ns; MyTimer tmr;
   EbbCtrRef globalEbbCtr;
 
-  start = now();
+  ns_start(tmr);
   globalEbbCtr = EbbCtr::GlobalCtr();
-  end = now();
+  ns = ns_stop(tmr);
 
   MY_PRINT("RES: %s: EbbCtr::GlobalEbbCtr() : %" PRId32 " %" PRIu64 "\n", 
-	   __PFUNC__,1, nsdiff(start,end));
+	   __PFUNC__,1, ns);
 
   CtrRefWork(globalEbbCtr,cnt,rc);
   return rc;
@@ -548,24 +548,24 @@ int
 HeapEbbCtrTest(int cnt)
 {
   int rc=0;
-  tp start, end;
+  uint64_t ns; MyTimer tmr;
   EbbCtrRef heapEbbCtr;
 
-  start = now();
+  ns_start(tmr);
   heapEbbCtr = EbbCtr::Create();
-  end = now();
+  ns = ns_stop(tmr);
 
   MY_PRINT("RES: %s: EbbCtr::Create() : %" PRId32 " %" PRIu64 "\n", 
-	   __PFUNC__,1, nsdiff(start,end));
+	   __PFUNC__,1, ns);
 
   CtrRefWork(heapEbbCtr,cnt,rc);
 
-  start = now();
+  ns_start(tmr);
   heapEbbCtr->destroy();
-  end = now();
+  ns = ns_stop(tmr);
 
   MY_PRINT("RES: %s: EbbCtr::destroy() : %" PRId32 " %" PRIu64 "\n", 
-	   __PFUNC__,1, nsdiff(start,end));
+	   __PFUNC__,1, ns);
   return rc;
 }
 
@@ -573,15 +573,15 @@ HeapEbbCtrTest(int cnt)
 int
 MPSharedHeapEbbCtrTest(int cnt, size_t n)
 {
-  tp start, end;
+  uint64_t ns; MyTimer tmr;
   MPSharedEbbCtrRef ctr;
 
-  start = now();
+  ns_start(tmr);
   ctr = MPSharedEbbCtr::Create();
-  end = now();
+  ns = ns_stop(tmr);
 
   MY_PRINT("RES: %s: MPSharedEbbCtr::Create() : %" PRId32 " %" PRIu64 "\n", 
-	   __PFUNC__,1, nsdiff(start,end));
+	   __PFUNC__,1, ns);
 
   MPTest("int MPSharedHeapEbbCtrTest()::inc", cnt, n, [ctr](int cnt) {
       int rc=0;
@@ -601,12 +601,12 @@ MPSharedHeapEbbCtrTest(int cnt, size_t n)
       return rc;
     } );
 
-  start = now();
+  ns_start(tmr);
   ctr->destroy();
-  end = now();
+  ns = ns_stop(tmr);
 
   MY_PRINT("RES: %s: MPSharedEbbCtr::destroy() : %" PRId32 " %" PRIu64 "\n", 
-	   __PFUNC__,1, nsdiff(start,end));
+	   __PFUNC__,1, ns);
   return 1;
 
 }
@@ -615,15 +615,15 @@ MPSharedHeapEbbCtrTest(int cnt, size_t n)
 int
 MPMultiHeapEbbCtrTest(int cnt, size_t n)
 {
-  tp start, end;
+  uint64_t ns; MyTimer tmr;
   MPMultiEbbCtrRef ctr;
 
-  start = now();
+  ns_start(tmr);
   ctr = MPMultiEbbCtr::Create();
-  end = now();
+  ns = ns_stop(tmr);
 
   MY_PRINT("RES: %s: MPMultiEbbCtr::Create() : %" PRId32 " %" PRIu64 "\n", 
-	   __PFUNC__,1, nsdiff(start,end));
+	   __PFUNC__,1, ns);
 
   MPTest("int MPMultiHeapEbbCtrTest()::inc", cnt, n, [ctr](int cnt) {
       int rc=0;
@@ -643,12 +643,12 @@ MPMultiHeapEbbCtrTest(int cnt, size_t n)
       return rc;
     } );
 
-  start = now();
+  ns_start(tmr);
   ctr->destroy();
-  end = now();
+  ns = ns_stop(tmr);
 
   MY_PRINT("RES: %s: MPMultiEbbCtr::destroy() : %" PRId32 " %" PRIu64 "\n", 
-	   __PFUNC__,1, nsdiff(start,end));
+	   __PFUNC__,1, ns);
   return 1;
 }
 
@@ -721,8 +721,12 @@ malloc_test(struct Arguments *args)
 
   MY_PRINT("_UBENCH_MALLOC_TEST_: START\n");
 
+#ifndef __STANDALONE__
   hoard_threadtest(UNIX::cmd_line_args->argc()-optind,
 		   &(UNIX::cmd_line_args->data()[optind]));
+#else
+  hoard_threadtest(args->argc-optind, &(args->argv[optind]));
+#endif
 
   MY_PRINT("_UBENCH_MALLOC_TEST_: END\n");
   return 1;
@@ -856,7 +860,8 @@ process_args(int argc, char **argv, struct Arguments *args)
   args->repeatCnt = REPEAT_CNT;
   args->actionCnt = ACTION_CNT;
   args->processorCnt = PROCESSOR_CNT;
-
+  args->argc = argc;
+  args->argv = argv;
   opterr = 0;
 
   while ((c = getopt (argc, argv, "hA:BCEF:IP:R:bcevnmpst")) != -1) {
@@ -1050,7 +1055,8 @@ int init(Arguments *args)
      {
        int argc;
        char **argv;
-       char *img_cmdline = (char *)ebbrt::multiboot::cmdline_addr_;
+       auto *img_cmdline =
+           reinterpret_cast<char *>(ebbrt::multiboot::cmdline_addr_);
        string_to_argv(img_cmdline, &argc, &argv);
        if (!process_args(argc, argv, args)) {
 	 MY_PRINT("ERROR in processing arguments\n");

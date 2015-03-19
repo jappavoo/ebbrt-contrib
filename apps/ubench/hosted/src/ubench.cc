@@ -15,6 +15,7 @@
 #include <boost/filesystem.hpp>
 #include <boost/container/static_vector.hpp>
 
+#include <ebbrt/Clock.h>
 #include <ebbrt/Context.h>
 #include <ebbrt/ContextActivation.h>
 #include <ebbrt/GlobalIdMap.h>

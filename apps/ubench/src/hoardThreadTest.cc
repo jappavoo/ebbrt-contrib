@@ -154,13 +154,13 @@ int hoard_threadtest (int argc, char * argv[])
   }
 
 
+  uint64_t ns; MyTimer tmr;
 #ifndef __EBBRT__
-  printf ("Running threadtest for %d threads, %d iterations, %d objects, %d work and %d size...\n", nthreads, niterations, nobjects, work, size);
+  MY_PRINT ("Running threadtest for %d threads, %d iterations, %d objects, %d work and %d size...\n", nthreads, niterations, nobjects, work, size);
 
   threads = new thread*[nthreads];
 
-  high_resolution_clock t;
-  auto start = t.now();
+  ns_start(tmr);
 
   int i;
   for (i = 0; i < nthreads; i++) {
@@ -171,10 +171,9 @@ int hoard_threadtest (int argc, char * argv[])
     threads[i]->join();
   }
 
-  auto stop = t.now();
+  ns = ns_stop(tmr);
 
-  auto elapsed = duration_cast<duration<double>>(stop - start);
-  cout << "Time elapsed = " << elapsed.count() << endl;
+  cout << "Time elapsed = " << ns << endl;
   delete [] threads;
 
 #else
@@ -182,14 +181,14 @@ int hoard_threadtest (int argc, char * argv[])
     " %d objects, %d work and %d size...\n", 
     nthreads, niterations, nobjects, work, size);
 
-  auto start = now();
+  ns_start(tmr);
   MPTest("int hoard_threadtest: worker", 1, nthreads, [](int) {
       worker();
       return 1;
     });
-  auto end = now();
+  ns = ns_stop(tmr);
 
-  MY_PRINT("Time elapsed = %" PRIu64 "\n", nsdiff(start,end));
+  MY_PRINT("Time elapsed = %" PRIu64 "\n", ns);
 #endif
   return 0;
 }

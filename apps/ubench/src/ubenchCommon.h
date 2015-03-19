@@ -29,6 +29,8 @@ struct Arguments {
   int repeatCnt;
   int actionCnt;
   int processorCnt;
+  int argc;
+  char** argv;
 };
 
 int MPTest(const char *name, int cnt, size_t n,
@@ -44,8 +46,8 @@ struct MainArgs {
 
 extern struct MainArgs margs;
 
-typedef ebbrt::clock::HighResTimer Timer;
-inline void ns_start(Timer &t) { t.tick(); }
-inline uint64_t ns_stop(Timer &t) { return t.tock().count(); }
+typedef ebbrt::clock::HighResTimer MyTimer;
+inline void ns_start(MyTimer &t) { t.tick(); }
+inline uint64_t ns_stop(MyTimer &t) { return t.tock().count(); }
 
 #endif
