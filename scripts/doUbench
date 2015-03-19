@@ -33,6 +33,7 @@ VMEXEC=/root/$(basename $EXEC)
 VMIMGDIR=vmimgs
 VMSRCKERNEL=/opt/ubench/vmimgs/vmlinuz-3.16.0-4-amd64
 VMSRCINITRD=/opt/ubench/vmimgs/debirf-minimal_jessie_3.16.0-4-amd64.cgz  
+EBBRTBM=apps/ubench/baremetal/build/Release/ubench.elf32
 
 # THE ACTUAL EXPERIMENT COMMANDS
 
@@ -65,26 +66,30 @@ for ((i=0; i<$RUNS; i++)); do
 done > $LINUXNOUT'
 fi
 
+# LINUXVM
+
 if [[ -z $EXP_DOTIMING ]]; then
 LINUXVMRUN="
 export EBBRT_NODE_ALLOCATOR_DEFAULT_CPUS=\$MAXPROCESSORS;
 NETID=\$($KH network | sed -n \"1 p\");
 for ((i=0; i<\$RUNS; i++)); do 
-   $KH alloc -s --cpu=\$MAXPROCESSORS --cmd=\"-append \\\"EXPCMD='$VMEXEC -R \$REPEAT -c' console=ttyS0 ro 1 quiet \\\"\" \$NETID \$VMKERNEL \$VMINITRD > khout;
-   node=\$(head -1 khout); fin=\$(grep finish khout); out=\$(grep stdout khout); cat \$fin; cat \$out; $KH rmnode \$node;
-   $KH alloc -s --cpu=\$MAXPROCESSORS --cmd=\"-append \\\"EXPCMD='$VMEXEC -R \$REPEAT -e' console=ttyS0 ro 1 quiet \\\"\" \$NETID \$VMKERNEL \$VMINITRD > khout;
-   node=\$(head -1 khout); fin=\$(grep finish khout); out=\$(grep stdout khout); cat \$fin; cat \$out; $KH rmnode \$node;
+   CORES=\$p
+   \$MYDIR/scripts/qemubench \$RUNDIR \$VMKERNEL \$VMINITRD \"-append \\\"EXPCMD='$VMEXEC -P \$p -R \$REPEAT -c' console=ttyS0 ro 1 quiet \\\"\";
+   fin=\$(cat \$RUNDIR/finish); out=\$(cat \$RUNDIR/out); kill=\$(kill \$(cat \$RUNDIR/pid));
+   \$MYDIR/scripts/qemubench \$RUNDIR \$VMKERNEL \$VMINITRD \"-append \\\"EXPCMD='$VMEXEC -P \$p -R \$REPEAT -e' console=ttyS0 ro 1 quiet \\\"\";
+   fin=\$(cat \$RUNDIR/finish); out=\$(cat \$RUNDIR/out); kill=\$(kill \$(cat \$RUNDIR/pid));
   for ((p=1; p<=\$MAXPROCESSORS; p++)); do  
-     $KH alloc -s --cpu=\$MAXPROCESSORS --cmd=\"-append \\\"EXPCMD='$VMEXEC -P \$p -R \$REPEAT -A 1000 -t' console=ttyS0 ro 1 quiet \\\"\" \$NETID \$VMKERNEL \$VMINITRD > khout;
-     node=\$(head -1 khout); fin=\$(grep finish khout); out=\$(grep stdout khout); cat \$fin; cat \$out; $KH rmnode \$node;
-     $KH alloc -s --cpu=\$MAXPROCESSORS --cmd=\"-append \\\"EXPCMD='$VMEXEC -P \$p -R \$REPEAT -n' console=ttyS0 ro 1 quiet \\\"\" \$NETID \$VMKERNEL \$VMINITRD > khout;
-     node=\$(head -1 khout); fin=\$(grep finish khout); out=\$(grep stdout khout); cat \$fin; cat \$out; $KH rmnode \$node;
-     $KH alloc -s --cpu=\$MAXPROCESSORS --cmd=\"-append \\\"EXPCMD='$VMEXEC -P \$p -R \$REPEAT -p' console=ttyS0 ro 1 quiet \\\"\" \$NETID \$VMKERNEL \$VMINITRD > khout;
-     node=\$(head -1 khout); fin=\$(grep finish khout); out=\$(grep stdout khout); cat \$fin; cat \$out; $KH rmnode \$node;
-     $KH alloc -s --cpu=\$MAXPROCESSORS --cmd=\"-append \\\"EXPCMD='$VMEXEC -P \$p -R \$REPEAT -A 100 -s' console=ttyS0 ro 1 quiet \\\"\" \$NETID \$VMKERNEL \$VMINITRD > khout;
-     node=\$(head -1 khout); fin=\$(grep finish khout); out=\$(grep stdout khout); cat \$fin; cat \$out; $KH rmnode \$node;
-     $KH alloc -s --cpu=\$MAXPROCESSORS --cmd=\"-append \\\"EXPCMD='$VMEXEC -m -- hoardthreadtest \$p' console=ttyS0 ro 1 quiet \\\"\" \$NETID \$VMKERNEL \$VMINITRD > khout;
-     node=\$(head -1 khout); fin=\$(grep finish khout); out=\$(grep stdout khout); cat \$fin; cat \$out; $KH rmnode \$node;
+     \$MYDIR/scripts/qemubench \$RUNDIR \$VMKERNEL \$VMINITRD \"-append \\\"EXPCMD='$VMEXEC -P \$p -R \$REPEAT -A 1000 -t' console=ttyS0 ro 1 quiet \\\"\";
+     fin=\$(cat \$RUNDIR/finish); out=\$(cat \$RUNDIR/out); kill=\$(kill \$(cat \$RUNDIR/pid));
+     \$MYDIR/scripts/qemubench \$RUNDIR \$VMKERNEL \$VMINITRD \"-append \\\"EXPCMD='$VMEXEC -P \$p -R \$REPEAT -n' console=ttyS0 ro 1 quiet \\\"\";
+     fin=\$(cat \$RUNDIR/finish); out=\$(cat \$RUNDIR/out); kill=\$(kill \$(cat \$RUNDIR/pid));
+     \$MYDIR/scripts/qemubench \$RUNDIR \$VMKERNEL \$VMINITRD \"-append \\\"EXPCMD='$VMEXEC -P \$p -R \$REPEAT -p' console=ttyS0 ro 1 quiet \\\"\";
+     fin=\$(cat \$RUNDIR/finish); out=\$(cat \$RUNDIR/out); kill=\$(kill \$(cat \$RUNDIR/pid));
+     \$MYDIR/scripts/qemubench \$RUNDIR \$VMKERNEL \$VMINITRD \"-append \\\"EXPCMD='$VMEXEC -P \$p -R \$REPEAT -A 100 -s' console=ttyS0 ro 1 quiet \\\"\";
+     fin=\$(cat \$RUNDIR/finish); out=\$(cat \$RUNDIR/out); kill=\$(kill \$(cat \$RUNDIR/pid));
+     \$MYDIR/scripts/qemubench \$RUNDIR \$VMKERNEL \$VMINITRD \"-append \\\"EXPCMD='$VMEXEC -m -- hoardthreadtest \$p' console=ttyS0 ro 1 quiet \\\"\";
+     fin=\$(cat \$RUNDIR/finish); out=\$(cat \$RUNDIR/out); kill=\$(kill \$(cat \$RUNDIR/pid));
+
   done;
 done > \$LINUXVMOUT; $KH clean"
 else
@@ -93,49 +98,56 @@ export EBBRT_NODE_ALLOCATOR_DEFAULT_CPUS=\$MAXPROCESSORS;
 NETID=\$($KH network | sed -n \"1 p\");
 for ((i=0; i<\$RUNS; i++)); do 
   for ((p=1; p<=\$MAXPROCESSORS; p++)); do  
-     $KH alloc -s --cpu=\$MAXPROCESSORS --cmd=\"-append \\\"EXPCMD='$VMEXEC -P \$p -R \$REPEAT -A 1000 -t' console=ttyS0 ro 1 quiet \\\"\" \$NETID \$VMKERNEL \$VMINITRD > khout;
-     node=\$(head -1 khout); fin=\$(grep finish khout); out=\$(grep stdout khout); cat \$fin; cat \$out; $KH rmnode \$node;
-     $KH alloc -s --cpu=\$MAXPROCESSORS --cmd=\"-append \\\"EXPCMD='$VMEXEC -P \$p -R \$REPEAT -A 2000 -t' console=ttyS0 ro 1 quiet \\\"\" \$NETID \$VMKERNEL \$VMINITRD > khout;
-     node=\$(head -1 khout); fin=\$(grep finish khout); out=\$(grep stdout khout); cat \$fin; cat \$out; $KH rmnode \$node;
-     $KH alloc -s --cpu=\$MAXPROCESSORS --cmd=\"-append \\\"EXPCMD='$VMEXEC -P \$p -R \$REPEAT -A 4000 -t' console=ttyS0 ro 1 quiet \\\"\" \$NETID \$VMKERNEL \$VMINITRD > khout;
-     node=\$(head -1 khout); fin=\$(grep finish khout); out=\$(grep stdout khout); cat \$fin; cat \$out; $KH rmnode \$node;
-     $KH alloc -s --cpu=\$MAXPROCESSORS --cmd=\"-append \\\"EXPCMD='$VMEXEC -P \$p -R \$REPEAT -A 8000 -t' console=ttyS0 ro 1 quiet \\\"\" \$NETID \$VMKERNEL \$VMINITRD > khout;
-     node=\$(head -1 khout); fin=\$(grep finish khout); out=\$(grep stdout khout); cat \$fin; cat \$out; $KH rmnode \$node;
-     $KH alloc -s --cpu=\$MAXPROCESSORS --cmd=\"-append \\\"EXPCMD='$VMEXEC -P \$p -R \$REPEAT -A 16000 -t' console=ttyS0 ro 1 quiet \\\"\" \$NETID \$VMKERNEL \$VMINITRD > khout;
-     node=\$(head -1 khout); fin=\$(grep finish khout); out=\$(grep stdout khout); cat \$fin; cat \$out; $KH rmnode \$node;
-     $KH alloc -s --cpu=\$MAXPROCESSORS --cmd=\"-append \\\"EXPCMD='$VMEXEC -P \$p -R \$REPEAT -A 10000000 -t' console=ttyS0 ro 1 quiet \\\"\" \$NETID \$VMKERNEL \$VMINITRD > khout;
-     node=\$(head -1 khout); fin=\$(grep finish khout); out=\$(grep stdout khout); cat \$fin; cat \$out; $KH rmnode \$node;
+     CORES=\$p
+     \$MYDIR/scripts/qemubench \$RUNDIR \$VMKERNEL \$VMINITRD \"-append \\\"EXPCMD='$VMEXEC -P \$p -R \$REPEAT -A 1000 -t' console=ttyS0 ro 1 quiet \\\"\";
+     fin=\$(cat \$RUNDIR/finish); out=\$(cat \$RUNDIR/out); kill=\$(kill \$(cat \$RUNDIR/pid));
+     \$MYDIR/scripts/qemubench \$RUNDIR \$VMKERNEL \$VMINITRD \"-append \\\"EXPCMD='$VMEXEC -P \$p -R \$REPEAT -A 2000 -t' console=ttyS0 ro 1 quiet \\\"\";
+     fin=\$(cat \$RUNDIR/finish); out=\$(cat \$RUNDIR/out); kill=\$(kill \$(cat \$RUNDIR/pid));
+     \$MYDIR/scripts/qemubench \$RUNDIR \$VMKERNEL \$VMINITRD \"-append \\\"EXPCMD='$VMEXEC -P \$p -R \$REPEAT -A 4000 -t' console=ttyS0 ro 1 quiet \\\"\";
+     fin=\$(cat \$RUNDIR/finish); out=\$(cat \$RUNDIR/out); kill=\$(kill \$(cat \$RUNDIR/pid));
+     \$MYDIR/scripts/qemubench \$RUNDIR \$VMKERNEL \$VMINITRD \"-append \\\"EXPCMD='$VMEXEC -P \$p -R \$REPEAT -A 8000 -t' console=ttyS0 ro 1 quiet \\\"\";
+     fin=\$(cat \$RUNDIR/finish); out=\$(cat \$RUNDIR/out); kill=\$(kill \$(cat \$RUNDIR/pid));
+     \$MYDIR/scripts/qemubench \$RUNDIR \$VMKERNEL \$VMINITRD \"-append \\\"EXPCMD='$VMEXEC -P \$p -R \$REPEAT -A 16000 -t' console=ttyS0 ro 1 quiet \\\"\";
+     fin=\$(cat \$RUNDIR/finish); out=\$(cat \$RUNDIR/out); kill=\$(kill \$(cat \$RUNDIR/pid));
+     \$MYDIR/scripts/qemubench \$RUNDIR \$VMKERNEL \$VMINITRD \"-append \\\"EXPCMD='$VMEXEC -P \$p -R \$REPEAT -A 10000000 -t' console=ttyS0 ro 1 quiet \\\"\";
+     fin=\$(cat \$RUNDIR/finish); out=\$(cat \$RUNDIR/out); kill=\$(kill \$(cat \$RUNDIR/pid));
+
   done;
 done > \$LINUXVMOUT; $KH clean"
 fi
 
+# EBBRT
+
 if [[ -z $EXP_DOTIMING ]]; then
-EBBRTRUN='
+EBBRTRUN="
 export EBBRT_NODE_ALLOCATOR_DEFAULT_CPUS=$MAXPROCESSORS;
 for ((i=0; i<$RUNS; i++)); do 
-   $EXEC -B -R $REPEAT -c; 
-   $EXEC -B -R $REPEAT -e;
+   \$MYDIR/scripts/qemubench \$RUNDIR $EBBRTBM /dev/null \"-P \$p -R $REPEAT -c\";
+   \$MYDIR/scripts/qemubench \$RUNDIR $EBBRTBM /dev/null \"-P \$p -R $REPEAT -e\";
    for ((p=1; p<=$MAXPROCESSORS; p++)); do  
-     $EXEC -B -P $p -R $REPEAT -A 1000 -t; 
-     $EXEC -B -P $p -R $REPEAT -n;
-     $EXEC -B -P $p -R $REPEAT -p;
-     $EXEC -B -P $p -R $REPEAT -A 100 -s;
-     $EXEC -B -m -- hoardthreadtest $p;
+     CORES=\$p
+     \$MYDIR/scripts/qemubench \$RUNDIR $EBBRTBM /dev/null \"-P \$p -R $REPEAT -A 1000 -t\";
+     \$MYDIR/scripts/qemubench \$RUNDIR $EBBRTBM /dev/null \"-P \$p -R $REPEAT -n\";
+     \$MYDIR/scripts/qemubench \$RUNDIR $EBBRTBM /dev/null \"-P \$p -R $REPEAT -p\";
+     \$MYDIR/scripts/qemubench \$RUNDIR $EBBRTBM /dev/null \"-P \$p -R $REPEAT -A 100 -s\";
+     \$MYDIR/scripts/qemubench \$RUNDIR $EBBRTBM /dev/null \"-P \$p -R $REPEAT -p\";
+     \$MYDIR/scripts/qemubench \$RUNDIR $EBBRTBM /dev/null \"-m -- hoardthreadtest $p\";
    done;
-done > $EBBRTOUT'
+done > $EBBRTOUT"
 else
-EBBRTRUN='
+EBBRTRUN="
 export EBBRT_NODE_ALLOCATOR_DEFAULT_CPUS=$MAXPROCESSORS;
 for ((i=0; i<$RUNS; i++)); do 
    for ((p=1; p<=$MAXPROCESSORS; p++)); do  
-     $EXEC -B -P $p -R $REPEAT -A 1000 -t; 
-     $EXEC -B -P $p -R $REPEAT -A 2000 -t; 
-     $EXEC -B -P $p -R $REPEAT -A 4000 -t; 
-     $EXEC -B -P $p -R $REPEAT -A 8000 -t; 
-     $EXEC -B -P $p -R $REPEAT -A 16000 -t; 
-     $EXEC -B -P $p -R $REPEAT -A 10000000 -t; 
+     CORES=\$p
+     \$MYDIR/scripts/qemubench \$RUNDIR $EBBRTBM /dev/null \"-P \$p -R $REPEAT -A 1000 -t\";
+     \$MYDIR/scripts/qemubench \$RUNDIR $EBBRTBM /dev/null \"-P \$p -R $REPEAT -A 2000 -t\";
+     \$MYDIR/scripts/qemubench \$RUNDIR $EBBRTBM /dev/null \"-P \$p -R $REPEAT -A 4000 -t\";
+     \$MYDIR/scripts/qemubench \$RUNDIR $EBBRTBM /dev/null \"-P \$p -R $REPEAT -A 8000 -t\";
+     \$MYDIR/scripts/qemubench \$RUNDIR $EBBRTBM /dev/null \"-P \$p -R $REPEAT -A 16000 -t\";
+     \$MYDIR/scripts/qemubench \$RUNDIR $EBBRTBM /dev/null \"-P \$p -R $REPEAT -A 10000000 -t\";
    done;
-done > $EBBRTOUT'
+done > $EBBRTOUT"
 fi
 
 
