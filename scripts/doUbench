@@ -72,22 +72,22 @@ if [[ -z $EXP_DOTIMING ]]; then
 LINUXVMRUN="
 export EBBRT_NODE_ALLOCATOR_DEFAULT_CPUS=\$MAXPROCESSORS;
 for ((i=0; i<\$RUNS; i++)); do 
-   CORES=\$p
-   \$MYDIR/scripts/qemubench \$RUNDIR \$VMKERNEL \$VMINITRD \"EXPCMD='$VMEXEC -P \$p -R \$REPEAT -c' console=ttyS0 ro 1 quiet \";
-   fin=\$(cat \$RUNDIR/finish); out=\$(cat \$RUNDIR/stdout); kill=\$(kill \$(cat \$RUNDIR/pid));
-   \$MYDIR/scripts/qemubench \$RUNDIR \$VMKERNEL \$VMINITRD \"EXPCMD='$VMEXEC -P \$p -R \$REPEAT -e' console=ttyS0 ro 1 quiet \";
-   fin=\$(cat \$RUNDIR/finish); out=\$(cat \$RUNDIR/stdout); kill=\$(kill \$(cat \$RUNDIR/pid));
+   \$MYDIR/scripts/qemubench \$RUNDIR \$VMKERNEL \$VMINITRD \"EXPCMD='$VMEXEC -R \$REPEAT -c' console=ttyS0 ro 1 quiet \";
+   fin=\$(cat \$RUNDIR/finish); cat \$RUNDIR/stdout; kill=\$(kill \$(cat \$RUNDIR/pid));
+   \$MYDIR/scripts/qemubench \$RUNDIR \$VMKERNEL \$VMINITRD \"EXPCMD='$VMEXEC -R \$REPEAT -e' console=ttyS0 ro 1 quiet \";
+   fin=\$(cat \$RUNDIR/finish); cat \$RUNDIR/stdout; kill=\$(kill \$(cat \$RUNDIR/pid));
   for ((p=1; p<=\$MAXPROCESSORS; p++)); do  
+     export CORES=\$p;
      \$MYDIR/scripts/qemubench \$RUNDIR \$VMKERNEL \$VMINITRD \"EXPCMD='$VMEXEC -P \$p -R \$REPEAT -A 1000 -t' console=ttyS0 ro 1 quiet \";
-     fin=\$(cat \$RUNDIR/finish); out=\$(cat \$RUNDIR/stdout); kill=\$(kill \$(cat \$RUNDIR/pid));
+     fin=\$(cat \$RUNDIR/finish); cat \$RUNDIR/stdout; kill=\$(kill \$(cat \$RUNDIR/pid));
      \$MYDIR/scripts/qemubench \$RUNDIR \$VMKERNEL \$VMINITRD \"EXPCMD='$VMEXEC -P \$p -R \$REPEAT -n' console=ttyS0 ro 1 quiet \";
-     fin=\$(cat \$RUNDIR/finish); out=\$(cat \$RUNDIR/stdout); kill=\$(kill \$(cat \$RUNDIR/pid));
+     fin=\$(cat \$RUNDIR/finish); cat \$RUNDIR/stdout; kill=\$(kill \$(cat \$RUNDIR/pid));
      \$MYDIR/scripts/qemubench \$RUNDIR \$VMKERNEL \$VMINITRD \"EXPCMD='$VMEXEC -P \$p -R \$REPEAT -p' console=ttyS0 ro 1 quiet \";
-     fin=\$(cat \$RUNDIR/finish); out=\$(cat \$RUNDIR/stdout); kill=\$(kill \$(cat \$RUNDIR/pid));
+     fin=\$(cat \$RUNDIR/finish); cat \$RUNDIR/stdout; kill=\$(kill \$(cat \$RUNDIR/pid));
      \$MYDIR/scripts/qemubench \$RUNDIR \$VMKERNEL \$VMINITRD \"EXPCMD='$VMEXEC -P \$p -R \$REPEAT -A 100 -s' console=ttyS0 ro 1 quiet \";
-     fin=\$(cat \$RUNDIR/finish); out=\$(cat \$RUNDIR/stdout); kill=\$(kill \$(cat \$RUNDIR/pid));
+     fin=\$(cat \$RUNDIR/finish); cat \$RUNDIR/stdout; kill=\$(kill \$(cat \$RUNDIR/pid));
      \$MYDIR/scripts/qemubench \$RUNDIR \$VMKERNEL \$VMINITRD \"EXPCMD='$VMEXEC -m -- hoardthreadtest \$p' console=ttyS0 ro 1 quiet \";
-     fin=\$(cat \$RUNDIR/finish); out=\$(cat \$RUNDIR/stdout); kill=\$(kill \$(cat \$RUNDIR/pid));
+     fin=\$(cat \$RUNDIR/finish); cat \$RUNDIR/stdout; kill=\$(kill \$(cat \$RUNDIR/pid));
 
   done;
 done > \$LINUXVMOUT; "
@@ -96,20 +96,19 @@ LINUXVMRUN="
 export EBBRT_NODE_ALLOCATOR_DEFAULT_CPUS=\$MAXPROCESSORS;
 for ((i=0; i<\$RUNS; i++)); do 
   for ((p=1; p<=\$MAXPROCESSORS; p++)); do  
-     CORES=\$p
+     export CORES=\$p;
      \$MYDIR/scripts/qemubench \$RUNDIR \$VMKERNEL \$VMINITRD \"EXPCMD='$VMEXEC -P \$p -R \$REPEAT -A 1000 -t' console=ttyS0 ro 1 quiet \";
-     fin=\$(cat \$RUNDIR/finish); out=\$(cat \$RUNDIR/stdout); kill=\$(kill \$(cat \$RUNDIR/pid));
+     fin=\$(cat \$RUNDIR/finish); cat \$RUNDIR/stdout; kill=\$(kill \$(cat \$RUNDIR/pid));
      \$MYDIR/scripts/qemubench \$RUNDIR \$VMKERNEL \$VMINITRD \"EXPCMD='$VMEXEC -P \$p -R \$REPEAT -A 2000 -t' console=ttyS0 ro 1 quiet \";
-     fin=\$(cat \$RUNDIR/finish); out=\$(cat \$RUNDIR/stdout); kill=\$(kill \$(cat \$RUNDIR/pid));
+     fin=\$(cat \$RUNDIR/finish); cat \$RUNDIR/stdout; kill=\$(kill \$(cat \$RUNDIR/pid));
      \$MYDIR/scripts/qemubench \$RUNDIR \$VMKERNEL \$VMINITRD \"EXPCMD='$VMEXEC -P \$p -R \$REPEAT -A 4000 -t' console=ttyS0 ro 1 quiet \";
-     fin=\$(cat \$RUNDIR/finish); out=\$(cat \$RUNDIR/stdout); kill=\$(kill \$(cat \$RUNDIR/pid));
+     fin=\$(cat \$RUNDIR/finish); cat \$RUNDIR/stdout; kill=\$(kill \$(cat \$RUNDIR/pid));
      \$MYDIR/scripts/qemubench \$RUNDIR \$VMKERNEL \$VMINITRD \"EXPCMD='$VMEXEC -P \$p -R \$REPEAT -A 8000 -t' console=ttyS0 ro 1 quiet \";
-     fin=\$(cat \$RUNDIR/finish); out=\$(cat \$RUNDIR/stdout); kill=\$(kill \$(cat \$RUNDIR/pid));
+     fin=\$(cat \$RUNDIR/finish); cat \$RUNDIR/stdout; kill=\$(kill \$(cat \$RUNDIR/pid));
      \$MYDIR/scripts/qemubench \$RUNDIR \$VMKERNEL \$VMINITRD \"EXPCMD='$VMEXEC -P \$p -R \$REPEAT -A 16000 -t' console=ttyS0 ro 1 quiet \";
-     fin=\$(cat \$RUNDIR/finish); out=\$(cat \$RUNDIR/stdout); kill=\$(kill \$(cat \$RUNDIR/pid));
+     fin=\$(cat \$RUNDIR/finish); cat \$RUNDIR/stdout; kill=\$(kill \$(cat \$RUNDIR/pid));
      \$MYDIR/scripts/qemubench \$RUNDIR \$VMKERNEL \$VMINITRD \"EXPCMD='$VMEXEC -P \$p -R \$REPEAT -A 10000000 -t' console=ttyS0 ro 1 quiet \";
-     fin=\$(cat \$RUNDIR/finish); out=\$(cat \$RUNDIR/stdout); kill=\$(kill \$(cat \$RUNDIR/pid));
-
+     fin=\$(cat \$RUNDIR/finish); cat \$RUNDIR/stdout; kill=\$(kill \$(cat \$RUNDIR/pid));
   done;
 done > \$LINUXVMOUT; "
 fi
@@ -118,48 +117,48 @@ fi
 
 if [[ -z $EXP_DOTIMING ]]; then
 EBBRTRUN="
-export EBBRT_NODE_ALLOCATOR_DEFAULT_CPUS=$MAXPROCESSORS;
-for ((i=0; i<$RUNS; i++)); do 
-   \$MYDIR/scripts/qemubench \$RUNDIR $EBBRTBM /dev/null \"-P \$p -R $REPEAT -c\";
-     fin=\$(cat \$RUNDIR/finish); out=\$(cat \$RUNDIR/stdout); 
-   \$MYDIR/scripts/qemubench \$RUNDIR $EBBRTBM /dev/null \"-P \$p -R $REPEAT -e\";
-     fin=\$(cat \$RUNDIR/finish); out=\$(cat \$RUNDIR/stdout); 
-   for ((p=1; p<=$MAXPROCESSORS; p++)); do  
-     CORES=\$p
-     \$MYDIR/scripts/qemubench \$RUNDIR $EBBRTBM /dev/null \"-P \$p -R $REPEAT -A 1000 -t\";
-     fin=\$(cat \$RUNDIR/finish); out=\$(cat \$RUNDIR/stdout); 
-     \$MYDIR/scripts/qemubench \$RUNDIR $EBBRTBM /dev/null \"-P \$p -R $REPEAT -n\";
-     fin=\$(cat \$RUNDIR/finish); out=\$(cat \$RUNDIR/stdout);
-     \$MYDIR/scripts/qemubench \$RUNDIR $EBBRTBM /dev/null \"-P \$p -R $REPEAT -p\";
-     fin=\$(cat \$RUNDIR/finish); out=\$(cat \$RUNDIR/stdout); 
-     \$MYDIR/scripts/qemubench \$RUNDIR $EBBRTBM /dev/null \"-P \$p -R $REPEAT -A 100 -s\";
-     fin=\$(cat \$RUNDIR/finish); out=\$(cat \$RUNDIR/stdout); 
-     \$MYDIR/scripts/qemubench \$RUNDIR $EBBRTBM /dev/null \"-P \$p -R $REPEAT -p\";
-     fin=\$(cat \$RUNDIR/finish); out=\$(cat \$RUNDIR/stdout);
-     \$MYDIR/scripts/qemubench \$RUNDIR $EBBRTBM /dev/null \"-m -- hoardthreadtest $p\";
-     fin=\$(cat \$RUNDIR/finish); out=\$(cat \$RUNDIR/stdout); 
+export EBBRT_NODE_ALLOCATOR_DEFAULT_CPUS=\$MAXPROCESSORS;
+for ((i=0; i<\$RUNS; i++)); do 
+   \$MYDIR/scripts/qemubench \$RUNDIR \$EBBRTBM /dev/null \" -R $REPEAT -c\";
+     fin=\$(cat \$RUNDIR/finish); cat \$RUNDIR/stdout; 
+   \$MYDIR/scripts/qemubench \$RUNDIR \$EBBRTBM /dev/null \" -R $REPEAT -e\";
+     fin=\$(cat \$RUNDIR/finish); cat \$RUNDIR/stdout; 
+   for ((p=1; p<=\$MAXPROCESSORS; p++)); do  
+     export CORES=\$p;
+     \$MYDIR/scripts/qemubench \$RUNDIR \$EBBRTBM /dev/null \"-P \$p -R \$REPEAT -A 1000 -t\";
+     fin=\$(cat \$RUNDIR/finish); cat \$RUNDIR/stdout; 
+     \$MYDIR/scripts/qemubench \$RUNDIR \$EBBRTBM /dev/null \"-P \$p -R \$REPEAT -n\";
+     fin=\$(cat \$RUNDIR/finish); cat \$RUNDIR/stdout;
+     \$MYDIR/scripts/qemubench \$RUNDIR \$EBBRTBM /dev/null \"-P \$p -R \$REPEAT -p\";
+     fin=\$(cat \$RUNDIR/finish); cat \$RUNDIR/stdout; 
+     \$MYDIR/scripts/qemubench \$RUNDIR \$EBBRTBM /dev/null \"-P \$p -R \$REPEAT -A 100 -s\";
+     fin=\$(cat \$RUNDIR/finish); cat \$RUNDIR/stdout; 
+     \$MYDIR/scripts/qemubench \$RUNDIR \$EBBRTBM /dev/null \"-P \$p -R \$REPEAT -p\";
+     fin=\$(cat \$RUNDIR/finish); cat \$RUNDIR/stdout;
+     \$MYDIR/scripts/qemubench \$RUNDIR \$EBBRTBM /dev/null \"-m -- hoardthreadtest \$p\";
+     fin=\$(cat \$RUNDIR/finish); cat \$RUNDIR/stdout; 
    done;
-done > $EBBRTOUT"
+done > \$EBBRTOUT"
 else
 EBBRTRUN="
-export EBBRT_NODE_ALLOCATOR_DEFAULT_CPUS=$MAXPROCESSORS;
-for ((i=0; i<$RUNS; i++)); do 
-   for ((p=1; p<=$MAXPROCESSORS; p++)); do  
-     CORES=\$p
-     \$MYDIR/scripts/qemubench \$RUNDIR $EBBRTBM /dev/null \"-P \$p -R $REPEAT -A 1000 -t\";
-     fin=\$(cat \$RUNDIR/finish); out=\$(cat \$RUNDIR/stdout); 
-     \$MYDIR/scripts/qemubench \$RUNDIR $EBBRTBM /dev/null \"-P \$p -R $REPEAT -A 2000 -t\";
-     fin=\$(cat \$RUNDIR/finish); out=\$(cat \$RUNDIR/stdout);
-     \$MYDIR/scripts/qemubench \$RUNDIR $EBBRTBM /dev/null \"-P \$p -R $REPEAT -A 4000 -t\";
-     fin=\$(cat \$RUNDIR/finish); out=\$(cat \$RUNDIR/stdout);
-     \$MYDIR/scripts/qemubench \$RUNDIR $EBBRTBM /dev/null \"-P \$p -R $REPEAT -A 8000 -t\";
-     fin=\$(cat \$RUNDIR/finish); out=\$(cat \$RUNDIR/stdout);
-     \$MYDIR/scripts/qemubench \$RUNDIR $EBBRTBM /dev/null \"-P \$p -R $REPEAT -A 16000 -t\";
-     fin=\$(cat \$RUNDIR/finish); out=\$(cat \$RUNDIR/stdout);
-     \$MYDIR/scripts/qemubench \$RUNDIR $EBBRTBM /dev/null \"-P \$p -R $REPEAT -A 10000000 -t\";
-     fin=\$(cat \$RUNDIR/finish); out=\$(cat \$RUNDIR/stdout);
+export EBBRT_NODE_ALLOCATOR_DEFAULT_CPUS=\$MAXPROCESSORS;
+for ((i=0; i<\$RUNS; i++)); do 
+   for ((p=1; p<=\$MAXPROCESSORS; p++)); do  
+     export CORES=\$p;
+     \$MYDIR/scripts/qemubench \$RUNDIR \$EBBRTBM /dev/null \"-P \$p -R \$REPEAT -A 1000 -t\";
+     fin=\$(cat \$RUNDIR/finish); cat \$RUNDIR/stdout; 
+     \$MYDIR/scripts/qemubench \$RUNDIR \$EBBRTBM /dev/null \"-P \$p -R \$REPEAT -A 2000 -t\";
+     fin=\$(cat \$RUNDIR/finish); cat \$RUNDIR/stdout;
+     \$MYDIR/scripts/qemubench \$RUNDIR \$EBBRTBM /dev/null \"-P \$p -R \$REPEAT -A 4000 -t\";
+     fin=\$(cat \$RUNDIR/finish); cat \$RUNDIR/stdout;
+     \$MYDIR/scripts/qemubench \$RUNDIR \$EBBRTBM /dev/null \"-P \$p -R \$REPEAT -A 8000 -t\";
+     fin=\$(cat \$RUNDIR/finish); cat \$RUNDIR/stdout;
+     \$MYDIR/scripts/qemubench \$RUNDIR \$EBBRTBM /dev/null \"-P \$p -R \$REPEAT -A 16000 -t\";
+     fin=\$(cat \$RUNDIR/finish); cat \$RUNDIR/stdout;
+     \$MYDIR/scripts/qemubench \$RUNDIR \$EBBRTBM /dev/null \"-P \$p -R \$REPEAT -A 10000000 -t\";
+     fin=\$(cat \$RUNDIR/finish); cat \$RUNDIR/stdout;
    done;
-done > $EBBRTOUT"
+done > \$EBBRTOUT"
 fi
 
 
@@ -220,6 +219,7 @@ RUNS=$RUNS
 REPEAT=$REPEAT
 MAXPROCESSORS=$MAXPROCESSORS
 EXEC=\$APPDIR/$(basename $EXEC)
+EBBRTBM=\$APPDIR/$(basename $EBBRTBM)
 KH=$KH
 VMKERNEL=\$APPDIR/$VMKERNEL
 VMINITRD=\$APPDIR/$VMINITRD
@@ -264,7 +264,7 @@ function startExp()
 function copyFiles()
 {
    deps="$(ldd $EXEC |while read line; do line=${line#*/}; echo /${line%% *}; done | grep -v 'linux-vdso.so')"
-   files="$EXEC $EXTRAFILES $deps $VMKERNEL $VMINITRD"
+   files="$EXEC $EXTRAFILES $deps $VMKERNEL $VMINITRD $EBBRTBM"
    [[ -a $DONEXPDIR/files ]] && rm -rf $DONEXPDIR/files
    mkdir $DONEXPDIR/files
    cp -aL -t $DONEXPDIR/files $files 
