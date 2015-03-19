@@ -1,5 +1,6 @@
 #include <ebbrt/Debug.h>
 #include <ebbrt/Console.h>
+#include <ebbrt/Multiboot.h>
 #include <stdint.h>
 #include <inttypes.h>
 #include <assert.h>
@@ -14,12 +15,12 @@
 void
 bootimgargs_test(struct Arguments *args)
 {
-#ifdef _UBENCH_BOOT_IMG_CMD_LINE_TEST_
+  if (!args->tests.bootargs) return;
   ebbrt::kprintf("_UBENCH_BOOT_IMG_CMD_LINE_TEST_: Start\n");
   {
     int argc;
     char **argv;
-    char *img_cmdline = NULL;
+    char *img_cmdline = (char *)ebbrt::multiboot::cmdline_addr_;
     
     if (img_cmdline)  ebbrt::kprintf("ubench: BEGIN: %s\n", img_cmdline);
 
@@ -31,6 +32,5 @@ bootimgargs_test(struct Arguments *args)
     }
   }
   ebbrt::kprintf("_UBENCH_BOOT_IMG_CMD_LINE_TEST_: End\n");
-#endif
 }
 

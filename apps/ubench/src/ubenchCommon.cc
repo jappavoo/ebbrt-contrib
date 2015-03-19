@@ -36,17 +36,18 @@
 
 #include <ebbrt/Debug.h>
 #include <ebbrt/Console.h>
+#include <ebbrt/Acpi.h>
 
 #define MY_PRINT ebbrt::kprintf
 
-void  bootimgargs_test(struct Arguments *);
+int  bootimgargs_test(struct Arguments *);
 #endif
 
 #include <ebbrt/SharedEbb.h>
 #include <ebbrt/MulticoreEbb.h>
 #include <ebbrt/SpinBarrier.h>
 #include <ebbrt/CacheAligned.h>
- 
+#include <ebbrt/Clock.h>
 #include "Unix.h"
 #include "ubenchCommon.h"
 
@@ -88,14 +89,15 @@ MPTest(const char *name, int cnt, size_t n,
   for (size_t i=0; i<n; i++) {
     ebbrt::event_manager->SpawnRemote([i,n,&context,theCpu,&count,
 				       &work,cnt]() {
-      tp start, end;
+      uint64_t ns;
+      Timer tmr;
       int rc;
       bar.Wait();
-      start = now();
+      ns_start(tmr);
       rc=work(cnt);
-      end = now();
+      ns = ns_stop(tmr);
       bar.Wait();
-      MPResults[i].time=nsdiff(start,end);
+      MPResults[i].time=ns;
       MPResults[i].rc=rc;
       count++;
       while (count < (size_t)n);
@@ -307,39 +309,38 @@ VirtualCtr VirtualGlobalCtr;
 
 #define CtrWork(CTR,CNT,SUM)			\
   {						\
-  int rc = 0;					\
-  tp start, end;				\
-  int i;					\
-  start = now();				\
-  for (i=0; i<cnt; i++) {			\
-    CTR.inc();					\
-  }						\
-  SUM+=i;					\
-  end = now();						\
-  MY_PRINT("RES: %s: " #CTR ".inc(): %"			\
-		 PRId32 " %" PRIu64 "\n",  __PFUNC__,	\
-	   CNT, nsdiff(start,end));			\
-  							\
-  start = now();				\
-  for (i=0; i<CNT; i++) {		\
-    CTR.dec();			\
-  }						\
-  SUM+=i;					\
-  end = now();					\
-  MY_PRINT("RES: %s: " #CTR ".dec(): %"		\
-          PRId32 " %" PRIu64 "\n", __PFUNC__,	\
-	     CNT, nsdiff(start,end));	\
-						\
-  start = now();				\
-  for (i=0; i<CNT; i++) {			\
-    rc += CTR.val();				\
-  }						\
+    int rc = 0;					\
+    Timer tmr; uint64_t ns;	\
+    int i;					\
+    ns_start(tmr);				\
+    for (i=0; i<cnt; i++) {			\
+      CTR.inc();				\
+    }							\
+    SUM+=i;						\
+    ns = ns_stop(tmr);					\
+    MY_PRINT("RES: %s: " #CTR ".inc(): %"		\
+	     PRId32 " %" PRIu64 "\n",  __PFUNC__,	\
+	     CNT, ns);			\
+    							\
+    ns_start(tmr);					\
+    for (i=0; i<CNT; i++) {				\
+      CTR.dec();					\
+    }							\
+    SUM+=i;						\
+    ns = ns_stop(tmr);					\
+    MY_PRINT("RES: %s: " #CTR ".dec(): %"		\
+	     PRId32 " %" PRIu64 "\n", __PFUNC__,	\
+	   CNT, ns);		\
+    rc=0;					\
+    ns_start(tmr);				\
+    for (i=0; i<CNT; i++) {			\
+      rc += CTR.val();				\
+    }						\
   SUM+=rc;					\
-  end = now();					\
-  assert(rc==0);				\
-  MY_PRINT("RES: %s: " #CTR ".val(): %"	\
-	  PRId32 " %" PRIu64 "\n", __PFUNC__,	\
-	     CNT, nsdiff(start,end));	\
+  ns = ns_stop(tmr);					\
+  MY_PRINT("RES: %s: %d " #CTR ".val(): %"		\
+	   PRId32 " %" PRIu64 "\n", __PFUNC__, rc,	\
+	     CNT, ns);	\
   }
 
 #define CtrRefWork(CTR,CNT,SUM)			\
@@ -366,7 +367,7 @@ VirtualCtr VirtualGlobalCtr;
   MY_PRINT("RES: %s: " #CTR "->dec(): %"	\
           PRId32 " %" PRIu64 "\n", __PFUNC__,	\
 	   CNT, nsdiff(start,end));		\
-						\
+  rc=0;						\
   start = now();				\
   for (i=0; i<CNT; i++) {			\
     rc += CTR->val();				\
@@ -435,15 +436,15 @@ int
 HeapCtrTest(int cnt)
 {  
   int rc=0;
-  tp start, end;
+  uint64_t ns; Timer tmr;
 
-  start = now();
+  ns_start(tmr);
   Ctr *heapCtr = new Ctr;
-  end = now();
+  ns = ns_stop(tmr);
   assert(heapCtr!=NULL);
 
   MY_PRINT("RES: %s: new Ctr: %" PRId32 " %" PRIu64 "\n", 
-	   __PFUNC__,1, nsdiff(start,end));
+	   __PFUNC__,1, ns);
 
   CtrRefWork(heapCtr,cnt,rc);
 
@@ -858,7 +859,7 @@ process_args(int argc, char **argv, struct Arguments *args)
 
   opterr = 0;
 
-  while ((c = getopt (argc, argv, "hA:BCEF:IP:R:cevnmpst")) != -1) {
+  while ((c = getopt (argc, argv, "hA:BCEF:IP:R:bcevnmpst")) != -1) {
     switch (c)
       { 
       case 'h':
@@ -873,6 +874,7 @@ process_args(int argc, char **argv, struct Arguments *args)
 		" -I : Standard Input test\n"
                 " -P processorCount: number of processors/cores\n"
 		" -R repeatCount : number of times to repeat test\n"
+       	        " -b: bootargs test\n"
 		" -c : run basic UP  C++ tests\n"
 		" -e : run basic UP Ebb tests\n"
 		" -m : malloc tests\n"
@@ -910,6 +912,9 @@ process_args(int argc, char **argv, struct Arguments *args)
 	break;
       case 'n':
 	args->tests.nullfunc = 1;
+	break;
+      case 'b':
+	args->tests.bootargs = 1;
 	break;
       case 'c':
 	args->tests.cpp = 1;
@@ -1013,43 +1018,75 @@ filein_test(struct Arguments *args)
   return 1;
 }
 
+int init(Arguments *args)
+{
+#ifndef __STANDALONE__
+#ifdef __EBBRT_BM__
+  UNIX::Init();
+#else 
+   UNIX::Init(margs.argc, (const char **)margs.argv);
+#endif
+
+  if (!process_args(UNIX::cmd_line_args->argc(),
+		    UNIX::cmd_line_args->data(), args)) {
+    MY_PRINT("ERROR in processing arguments\n");
+    return 0;;
+  }
+
+#ifndef __EBBRT_BM__
+  if (args->backend)  {
+    auto bindir = 
+      boost::filesystem::system_complete(UNIX::cmd_line_args->argv(0)).parent_path() /
+      "bm/ubench.elf32";
+    ebbrt::node_allocator->AllocateNode(bindir.string());
+    return 0;
+  }  
+#endif
+
+  return 1;
+#else
+
+#ifdef __EBBRT_BM__
+     {
+       int argc;
+       char **argv;
+       char *img_cmdline = (char *)ebbrt::multiboot::cmdline_addr_;
+       string_to_argv(img_cmdline, &argc, &argv);
+       if (!process_args(argc, argv, args)) {
+	 MY_PRINT("ERROR in processing arguments\n");
+	 return 0;
+       }
+       args->standalone = 1;
+       return 1;
+     }
+#else
+  if (!process_args(margs.argc, (char **)margs.argv, args)) {
+    MY_PRINT("ERROR in processing arguments\n");
+    return 0;;
+  }
+  return 1;
+#endif
+#endif
+}
 
 void AppMain()
 {
   int rc=0;
   struct Arguments args;
 
-#ifdef __EBBRT_BM__
-  UNIX::Init();
-#else 
-  UNIX::Init(margs.argc, (const char **)margs.argv);
-#endif
-
-  if (!process_args(UNIX::cmd_line_args->argc(),
-		    UNIX::cmd_line_args->data(), &args)) {
-    MY_PRINT("ERROR in processing arguments\n");
-    goto DONE;
-  }
-
-#ifndef __EBBRT_BM__
-  if (args.backend)  {
-    auto bindir = 
-      boost::filesystem::system_complete(UNIX::cmd_line_args->argv(0)).parent_path() /
-      "bm/ubench.elf32";
-    ebbrt::node_allocator->AllocateNode(bindir.string());
-    return;
-  }  
-#endif
+  if (!init(&args)) goto DONE;
 
   MY_PRINT("_UBENCH_BENCHMARKS_: Start\n");  
 
+#ifndef __STANDALONE__
   rc+=cmdline_test(&args);
   rc+=env_test(&args);
   rc+=standardin_test(&args);
   rc+=filein_test(&args);
+#endif
 
 #ifdef __EBBRT_BM__
-  bootimgargs_test(&args);
+  rc=bootimgargs_test(&args);
 #endif
 
   rc+=timing_test(&args);
@@ -1066,7 +1103,11 @@ void AppMain()
 #ifndef __EBBRT_BM__
   ebbrt::Cpu::Exit(0);
 #else 
+#ifndef __STANDALONE__
   UNIX::root_fs->processExit(1);
+#else
+  ebbrt::acpi::PowerOff();
+#endif
 #endif
   
   return;

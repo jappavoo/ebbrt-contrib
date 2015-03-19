@@ -64,6 +64,7 @@ using namespace std::chrono;
 #include <ebbrt/SpinBarrier.h>
 #include <ebbrt/Debug.h>
 #include <ebbrt/EventManager.h>
+#include <ebbrt/Clock.h>
 
 #include "ubenchCommon.h"
 
