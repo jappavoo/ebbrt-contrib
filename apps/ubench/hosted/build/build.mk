@@ -2,3 +2,6 @@ app_sources := ubench.cc ubenchCommon.cc hoardThreadTest.cc Unix.cc CmdLineArgs.
 target := ubench
 
 include $(abspath ../../../../ebbrthosted.mk)
+
+ubenchCommon.o: ubenchCommon.cc
+	${CXX} ${CXXFLAGS} -fno-devirtualize ../../../src/ubenchCommon.cc -c 

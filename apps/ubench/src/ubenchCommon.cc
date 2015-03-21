@@ -56,73 +56,57 @@ int  bootimgargs_test(struct Arguments *);
 
 using namespace ebbrt;
 
+struct Result MPResults[ebbrt::Cpu::kMaxCpus];
 
-struct alignas(ebbrt::cache_size) Result {
-  uint64_t time;
-  int rc;
-  char pad[ebbrt::cache_size - sizeof(uint64_t) - sizeof(int)];
-} MPResults[ebbrt::Cpu::kMaxCpus];
+class NullOptimizable {
+ public:
+  void func() {}
+};
 
+class NullInlineable {
+ public:
+  void func() { asm volatile(""); }
+};
 
-#ifndef __EBBRT_BM__
-ebbrt::Context * indexToCPU(size_t i) 
-{
-    return ebbrt::Cpu::GetByIndex(i)->get_context();
-}
-#else
-size_t indexToCPU(size_t i) {return i;}
-#endif
+class NullNotInlineable {
+ public:
+  void __attribute__((noinline)) func() { asm volatile(""); }
+};
 
-int
-MPTest(const char *name, int cnt, size_t n,
-       ebbrt::MovableFunction<int(int)>work)
-{  
-  if (n<0) n=1; else if (n>ebbrt::Cpu::Count()) n=ebbrt::Cpu::Count();
+class NullVirtual {
+ public:
+  virtual void func() { asm volatile(""); }
 
-  static ebbrt::SpinBarrier bar(n);
-  size_t theCpu=ebbrt::Cpu::GetMine();
-  std::atomic<size_t> count(0);
+  virtual ~NullVirtual() = default;
+};
 
-  MY_PRINT("%s: Start\n", name);
+class NullEbb;
+typedef EbbRef<NullEbb> NullEbbRef ;
 
-  EventManager::EventContext context;
-  for (size_t i=0; i<n; i++) {
-    ebbrt::event_manager->SpawnRemote([i,n,&context,theCpu,&count,
-				       &work,cnt]() {
-      uint64_t ns;
-      MyTimer tmr;
-      int rc;
-      bar.Wait();
-      ns_start(tmr);
-      rc=work(cnt);
-      ns = ns_stop(tmr);
-      bar.Wait();
-      MPResults[i].time=ns;
-      MPResults[i].rc=rc;
-      count++;
-      while (count < (size_t)n);
-      if (ebbrt::Cpu::GetMine()==theCpu) {
-	ebbrt::event_manager->ActivateContext(std::move(context));
-      }
-    }, indexToCPU(i));
+class NullEbb : public SharedEbb<NullEbb> {
+public:
+  void func() { asm volatile(""); }
+  static NullEbbRef Create(EbbId id=ebb_allocator->AllocateLocal()) {
+    return SharedEbb<NullEbb>::Create(new NullEbb, id);
   }
-  ebbrt::event_manager->SaveContext(context);
-  for (size_t i=0; i<n; i++) {
-    MY_PRINT("RES: %s: rc=%d n=%" PRIu64 " i=%" PRIu64 ": %" PRId32 " %" PRIu64 "\n", 
-	     name, MPResults[i].rc, n, i, cnt, MPResults[i].time);
+  void destroy() { 
+    // FIXME: We don't support EbbId Cleanup yet so
+    // we are only reclaiming rep memory
+    delete this;
   }
-  assert(n==count);
-  MY_PRINT("%s: END\n", name);
-  return 1;
-}
+};
 
 class Ctr {
   int _val;
 public:
   Ctr() : _val(0) {}
-  void inc() { _val++; }
-  void dec() { _val--; }
-  int  val() { return _val; }
+  void inc() { asm volatile ("inc %0;" : "+r"(_val));  }
+  void dec() { asm volatile ("dec %0;" : "+r"(_val));  }
+  int  val()  { 
+    int rc;
+    asm volatile ("mov %1, %0;" : "=r"(rc) : "r"(_val));
+    return rc; 
+  } 
 };
 
 class VirtualCtr {
@@ -130,9 +114,13 @@ class VirtualCtr {
 public:
   VirtualCtr() : _val(0) {}
   virtual ~VirtualCtr() {}
-  virtual void inc() { _val++; }
-  virtual void dec() { _val--; }
-  virtual int val() { return _val; }
+  virtual void inc() { asm volatile ("inc %0;" : "+r"(_val));  }
+  virtual void dec() { asm volatile ("dec %0;" : "+r"(_val));  }
+  virtual int val() { 
+    int rc;
+    asm volatile ("mov %1, %0;" : "=r"(rc) : "r"(_val));
+    return rc; 
+  } 
 };
 
 
@@ -140,7 +128,7 @@ class MPSharedCtr {
   std::atomic<int> _val;
 public:
   MPSharedCtr() : _val(0) {}
-  void inc() { _val++; }
+  void inc() { _val++;  } 
   void dec() { _val--; }
   int val() { return _val; }
 };
@@ -152,9 +140,13 @@ class EbbCtr : public SharedEbb<EbbCtr> {
   int _val;
   EbbCtr() : _val(0)  {}
 public:
-  void inc() { _val++; }
-  void dec() { _val--; }
-  int val() { return _val; }
+  void inc() { asm volatile ("inc %0;" : "+r"(_val));  }
+  void dec() { asm volatile ("dec %0;" : "+r"(_val));  }
+  int val() { 
+    int rc;
+    asm volatile ("mov %1, %0;" : "=r"(rc) : "r"(_val));
+    return rc; 
+  } 
 
   void destroy() { 
     // FIXME: We don't support EbbId Cleanup yet so
@@ -235,7 +227,7 @@ class MPMultiEbbCtr : public MulticoreEbb<MPMultiEbbCtr, MPMultiEbbCtrRoot>  {
   const Root &_root;
   EbbId myId() { return _root._id; }
 
-  std::atomic<int> _val;
+  int _val;
   MPMultiEbbCtr(const Root &root) : _root(root), _val(0) {
     _root.setRep(ebbrt::Cpu::GetMine(), this);
   }
@@ -243,9 +235,9 @@ class MPMultiEbbCtr : public MulticoreEbb<MPMultiEbbCtr, MPMultiEbbCtrRoot>  {
   friend  Parent;
   friend MPMultiEbbCtrRoot;
 public:
-  void inc() { _val++; }
-  void dec() { _val--; }
-  int val() { return _root.gatherVal(); }
+  void inc() { asm volatile ("inc %0;" : "+r"(_val));  }
+  void dec() { asm volatile ("dec %0;" : "+r"(_val));  }
+  int val() { return _root.gatherVal(); } 
 
   void destroy()  { _root.destroy(); }
   
@@ -306,6 +298,34 @@ MPMultiEbbCtrRoot::otherGatherVal(void) const
 Ctr GlobalCtr;
 VirtualCtr VirtualGlobalCtr;
 
+#define NullWork(OBJ,CNT)			\
+  {						\
+  MyTimer tmr; uint64_t ns;			\
+  int i;					\
+  ns_start(tmr);				\
+  for (i=0; i<CNT; i++) {			\
+      OBJ.func();				\
+  }							\
+  ns = ns_stop(tmr);					\
+  MY_PRINT("RES: %s: " #OBJ ".func(): %"		\
+	   PRId32 " %" PRIu64 "\n",  __PFUNC__,		\
+	   CNT, ns);					\
+  }
+
+
+#define NullRefWork(OBJ,CNT)			\
+  {						\
+  MyTimer tmr; uint64_t ns;			\
+  int i;					\
+  ns_start(tmr);				\
+  for (i=0; i<CNT; i++) {			\
+      OBJ->func();				\
+  }							\
+  ns = ns_stop(tmr);					\
+  MY_PRINT("RES: %s: " #OBJ ".func(): %"		\
+	   PRId32 " %" PRIu64 "\n",  __PFUNC__,		\
+	   CNT, ns);					\
+  }
 
 #define CtrWork(CTR,CNT,SUM)			\
   {						\
@@ -846,8 +866,70 @@ int nullfunc_test(struct Arguments *args) {
 	return j;
       });
   }
+
   MY_PRINT("_UBENCH_NULLFUNC_TEST_: End\n");
   return 1;
+}
+
+int 
+NullOptimizable_test(int cnt) {
+  NullOptimizable *obj = new NullOptimizable;
+  NullRefWork(obj,cnt);
+  delete obj;
+  return 1;
+}
+
+int 
+NullInlineable_test(int cnt) {
+  NullInlineable *obj = new NullInlineable;
+  NullRefWork(obj,cnt);
+  delete obj;
+  return 1;
+}
+
+int 
+NullNotInlineable_test(int cnt) {
+  NullNotInlineable *obj = new NullNotInlineable;
+  NullRefWork(obj,cnt);
+  delete obj;
+  return 1;
+}
+
+int 
+NullVirtual_test(int cnt) {
+  NullVirtual  *obj = new NullVirtual;
+  NullRefWork(obj,cnt);
+  delete obj;
+  return 1;
+}
+
+int 
+NullEbb_test(int cnt) {
+  NullEbbRef ref = NullEbb::Create();
+  NullRefWork(ref,cnt);
+  ref->destroy();
+  return 1;
+}
+
+int nullobjects_test(struct Arguments *args) 
+{
+  if (!args->tests.nullobject) return 0;
+  int rc=0;
+  int rcnt = args->repeatCnt;
+  int acnt = args->actionCnt;
+  
+  MY_PRINT("_UBENCH_CPP_TEST_: START\n");
+  // Base line C++ method dispatch numbers 
+  for (int i=0; i<rcnt; i++) {
+    rc+=NullOptimizable_test(acnt);
+    rc+=NullInlineable_test(acnt);
+    rc+=NullNotInlineable_test(acnt);
+    rc+=NullVirtual_test(acnt);
+    rc+=NullEbb_test(acnt);
+  }
+  MY_PRINT("_UBENCH_CPP_TEST_: END\n"); 
+  return rc;
+
 }
 
 int 
@@ -864,11 +946,11 @@ process_args(int argc, char **argv, struct Arguments *args)
   args->argv = argv;
   opterr = 0;
 
-  while ((c = getopt (argc, argv, "hA:BCEF:IP:R:bcevnmpst")) != -1) {
+  while ((c = getopt (argc, argv, "hA:BCEF:IP:R:bcevnompst")) != -1) {
     switch (c)
       { 
       case 'h':
-	MY_PRINT("%s: [-h] [-A actionCount] [-B] [-C] [-E] [-F file] [-I] [-P  processorCount] [-R repeatCount] [-c] [-e] [-m] [-n] [-p] [-s] [-t]\n"
+	MY_PRINT("%s: [-h] [-A actionCount] [-B] [-C] [-E] [-F file] [-I] [-P  processorCount] [-R repeatCount] [-c] [-e] [-m] [-n] [-o] [-p] [-s] [-t]\n"
 		" EbbRT micro benchmarks\n"
 		" -h : help\n"
 		" -A actionCount : number of times to do test action\n"
@@ -884,6 +966,7 @@ process_args(int argc, char **argv, struct Arguments *args)
 		" -e : run basic UP Ebb tests\n"
 		" -m : malloc tests\n"
   	        " -n : test/calibrate nullfunc invocation cost\n"
+		" -o : null object test\n"
   	        " -p : run MP C++ and Ebb tests\n"
    	        " -s : run MP Local and Remote spawn test\n"
 		" -t : test/calibrate timing\n", argv[0]);
@@ -917,6 +1000,9 @@ process_args(int argc, char **argv, struct Arguments *args)
 	break;
       case 'n':
 	args->tests.nullfunc = 1;
+	break;
+      case 'o':
+	args->tests.nullobject = 1;
 	break;
       case 'b':
 	args->tests.bootargs = 1;
@@ -1097,6 +1183,7 @@ void AppMain()
 
   rc+=timing_test(&args);
   rc+=nullfunc_test(&args);
+  rc+=nullobjects_test(&args);
   rc+=cpp_test(&args);
   rc+=ebb_test(&args);
   rc+=spawn_test(&args);

@@ -43,6 +43,7 @@ export EBBRT_NODE_ALLOCATOR_DEFAULT_CPUS=$MAXPROCESSORS;
 for ((i=0; i<$RUNS; i++)); do 
    $EXEC -R $REPEAT -c;
    $EXEC -R $REPEAT -e;
+   $EXEC -R $REPEAT -o;
    for ((p=1; p<=$MAXPROCESSORS; p++)); do  
      $EXEC -P $p -R $REPEAT -A 1000 -t; 
      $EXEC -P $p -R $REPEAT -n;
@@ -75,6 +76,8 @@ for ((i=0; i<\$RUNS; i++)); do
    \$MYDIR/scripts/qemubench \$RUNDIR \$VMKERNEL \$VMINITRD \"EXPCMD='$VMEXEC -R \$REPEAT -c' console=ttyS0 ro 1 quiet \";
    fin=\$(cat \$RUNDIR/finish); cat \$RUNDIR/stdout; kill=\$(kill \$(cat \$RUNDIR/pid));
    \$MYDIR/scripts/qemubench \$RUNDIR \$VMKERNEL \$VMINITRD \"EXPCMD='$VMEXEC -R \$REPEAT -e' console=ttyS0 ro 1 quiet \";
+   fin=\$(cat \$RUNDIR/finish); cat \$RUNDIR/stdout; kill=\$(kill \$(cat \$RUNDIR/pid));
+   \$MYDIR/scripts/qemubench \$RUNDIR \$VMKERNEL \$VMINITRD \"EXPCMD='$VMEXEC -R \$REPEAT -o' console=ttyS0 ro 1 quiet \";
    fin=\$(cat \$RUNDIR/finish); cat \$RUNDIR/stdout; kill=\$(kill \$(cat \$RUNDIR/pid));
   for ((p=1; p<=\$MAXPROCESSORS; p++)); do  
      export CORES=\$p;
@@ -119,9 +122,11 @@ if [[ -z $EXP_DOTIMING ]]; then
 EBBRTRUN="
 export EBBRT_NODE_ALLOCATOR_DEFAULT_CPUS=\$MAXPROCESSORS;
 for ((i=0; i<\$RUNS; i++)); do 
-   \$MYDIR/scripts/qemubench \$RUNDIR \$EBBRTBM /dev/null \" -R $REPEAT -c\";
+   \$MYDIR/scripts/qemubench \$RUNDIR \$EBBRTBM /dev/null \" -R \$REPEAT -c\";
      fin=\$(cat \$RUNDIR/finish); cat \$RUNDIR/stdout; 
-   \$MYDIR/scripts/qemubench \$RUNDIR \$EBBRTBM /dev/null \" -R $REPEAT -e\";
+   \$MYDIR/scripts/qemubench \$RUNDIR \$EBBRTBM /dev/null \" -R \$REPEAT -e\";
+     fin=\$(cat \$RUNDIR/finish); cat \$RUNDIR/stdout; 
+   \$MYDIR/scripts/qemubench \$RUNDIR \$EBBRTBM /dev/null \" -R \$REPEAT -o\";
      fin=\$(cat \$RUNDIR/finish); cat \$RUNDIR/stdout; 
    for ((p=1; p<=\$MAXPROCESSORS; p++)); do  
      export CORES=\$p;
@@ -230,7 +235,6 @@ EBBRTOUT=\$RUNDIR/$EBBRTOUT
 export LD_LIBRARY_PATH=/home/kh/opt/lib/:\$APPDIR
 
 $LINUXNRUN
-$LINUXVMRUN
 $EBBRTRUN
 
 touch \$RUNDIR/$DONEFILE
@@ -351,10 +355,9 @@ if [[ -z $EXP_DRYRUN ]]; then
 fi
 else
     MYDIR=/home/don/kh
-    RUNDIR=/home/jmcadden/work/jappavoo-ebbrt-contrib
+    RUNDIR=$(pwd)
     eval $LINUXNRUN
     eval $EBBRTRUN
-    eval $LINUXVMRUN
 fi
 
 if [[ -z $EXP_DRYRUN ]]; then

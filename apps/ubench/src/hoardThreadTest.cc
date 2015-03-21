@@ -186,7 +186,7 @@ int hoard_threadtest (int argc, char * argv[])
       worker();
       return 1;
     });
-  ns = ns_stop(tmr);
+  ns = ns_stop(tmr); 
 
   MY_PRINT("Time elapsed = %" PRIu64 "\n", ns);
 #endif
