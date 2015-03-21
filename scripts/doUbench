@@ -138,8 +138,6 @@ for ((i=0; i<\$RUNS; i++)); do
      fin=\$(cat \$RUNDIR/finish); cat \$RUNDIR/stdout; 
      \$MYDIR/scripts/qemubench \$RUNDIR \$EBBRTBM /dev/null \"-P \$p -R \$REPEAT -A 100 -s\";
      fin=\$(cat \$RUNDIR/finish); cat \$RUNDIR/stdout; 
-     \$MYDIR/scripts/qemubench \$RUNDIR \$EBBRTBM /dev/null \"-P \$p -R \$REPEAT -p\";
-     fin=\$(cat \$RUNDIR/finish); cat \$RUNDIR/stdout;
      \$MYDIR/scripts/qemubench \$RUNDIR \$EBBRTBM /dev/null \"-m -- hoardthreadtest \$p\";
      fin=\$(cat \$RUNDIR/finish); cat \$RUNDIR/stdout; 
    done;
