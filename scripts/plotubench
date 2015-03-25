@@ -52,17 +52,21 @@ set xtics border in scale 0,0 nomirror rotate by -45  offset character 0, 0, 0 a
 set xtics  norangelimit font ",8"
 set xtics   ()
 set title "$exp"
-set yrange [0<*:]
+set yrange [0:]
 set key top left
-plot for [i=2:17:7] '$exp.data' using i+3:i+1:i+2:xticlabels(1) t ""
 EOF
+
+echo -n "plot " >> $exp.gnuplot
 
 i=1
 for f in $files
 do
     l1=${f%%:*}
     f=${f#*:}
-    echo "replot NaN title '$l1' lt $i lw 10"
+    echo -n "NaN title '$l1' lt $i lw 10, "
     (( i++ ))
 done >> $exp.gnuplot
+
+echo "for [i=2:17:7] '$exp.data' using i+3:i+1:i+2:xticlabels(1) t \"\"" >> $exp.gnuplot
+
 gnuplot $exp.gnuplot

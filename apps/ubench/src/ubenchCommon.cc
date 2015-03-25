@@ -96,6 +96,24 @@ public:
   }
 };
 
+class NullVirtualEbb;
+typedef EbbRef<NullVirtualEbb> NullVirtualEbbRef ;
+
+class NullVirtualEbb : public SharedEbb<NullVirtualEbb> {
+public:
+  void virtual func() { asm volatile(""); }
+  static NullVirtualEbbRef Create(EbbId id=ebb_allocator->AllocateLocal()) {
+    return SharedEbb<NullVirtualEbb>::Create(new NullVirtualEbb, id);
+  }
+
+  virtual ~NullVirtualEbb() = default;
+  void destroy() { 
+    // FIXME: We don't support EbbId Cleanup yet so
+    // we are only reclaiming rep memory
+    delete this;
+  }
+};
+
 class Ctr {
   int _val;
 public:
@@ -911,6 +929,14 @@ NullEbb_test(int cnt) {
   return 1;
 }
 
+int 
+NullVirtualEbb_test(int cnt) {
+  NullVirtualEbbRef ref = NullVirtualEbb::Create();
+  NullRefWork(ref,cnt);
+  ref->destroy();
+  return 1;
+}
+
 int nullobjects_test(struct Arguments *args) 
 {
   if (!args->tests.nullobject) return 0;
@@ -926,6 +952,7 @@ int nullobjects_test(struct Arguments *args)
     rc+=NullNotInlineable_test(acnt);
     rc+=NullVirtual_test(acnt);
     rc+=NullEbb_test(acnt);
+    rc+=NullVirtualEbb_test(acnt);
   }
   MY_PRINT("_UBENCH_CPP_TEST_: END\n"); 
   return rc;
@@ -1161,6 +1188,166 @@ int init(Arguments *args)
 #endif
 }
 
+#ifdef _PMC_TEST_
+#include "pmc.h"
+
+// 2.7.1 Core Performance Monitor Counters
+
+// The core performance monitor counters are used by software to count
+// specific events that occur in a core of the compute unit. Unless
+// otherwise specified, core performance events count only the
+// activity of the core, not activity caused by the other core of the
+// compute unit. Each core of each compute unit provides six 48-bit
+// per- formance counters.
+
+// MSRC001_020[A,8,6,4,2,0] [Performance Event Select (PERF_CTL[5:0])]
+// specify the events to be monitored and how they are
+// monitored. MSRC001_020[B,9,7,5,3,1] [Performance Event Counter
+// (PERF_CTR[5:0])] are the counters. MSRC001_00[03:00] is the legacy
+// alias for MSRC001_020[6,4,2,0]. MSRC001_00[07:04] is the legacy
+// alias for MSRC001_020[7,5,3,1]. 
+
+// All of the events are specified in 3.15 [Core Performance Counter
+// Events].  
+
+// Some performance monitor events have a maximum count per
+// clock that exceeds one event per clock. These performance events are
+// called multi-events. Some counters support a greater multi-event
+// count per clock than others. Events that are multi-events will
+// specify the maximum multi-event count per clock. E.g. The number of
+// events logged per cycle can vary from 0 to X. An event that doesn’t
+// specify multi-event is implied to be a max- imum of 1 event per
+// clock. Undefined results will be produced if an multi-event is
+// selected that exceeds that counters capabilities. The following list
+// specifies the maximum number of multi-events supported by each
+// counter:
+
+// PERF_CTL[0]: 31 multi-event per clock maximum. 
+// PERF_CTL[1]: 7 multi-event per clock maximum. 
+// PERF_CTL[2]: 7 multi-event per clock maximum.
+// PERF_CTL[3]: 63 multi-event per clock maximum. 
+// PERF_CTL[4]: 7 multi-event per clock maximum. 
+// PERF_CTL[5]: 7 multi-event per clock maximum.
+
+// Not all performance monitor events can be counted on all
+// counters. The performance counter registers are gen- erally
+// assigned to specific blocks of the core according to Table 22;
+// however, there are exceptions when an events is implemented by
+// another block of the core and therefore has the counter
+// restrictions of that block. Each core event description starts with
+// one of the following terms to indicate which counters support that
+// event. Selecting an event for a counter that does not support that
+// counter will produce undefined results.
+//	Table 22: Core PMC mapping to PERF_CTL[5:0]
+// PERF_CTL[5:0]      
+//                PERF_CTL[5:0] are used to count events in the LS/DC
+//                and EX where the number of events logged per cycle
+//                can vary up to 7.
+// PERF_CTL[3,0]  
+//                PERF_CTL[3,0] are used to count events in the LS/DC
+//                and EX where the number of events logged per cycle
+//                can vary up to 31.
+// PERF_CTL[0]
+//                PERF_CTL[0] are used to count events in the LS/DC,
+//                EX, IF/DE and CU where the number of events logged
+//                per cycle can vary up to 31.
+// Table 22: Core PMC mapping to PERF_CTL[5:0]
+
+// Writing the performance counters can be useful if there is an
+// intention for software to count a specific number of events, and
+// then trigger an interrupt when that count is reached. An interrupt
+// can be triggered when a perfor- mance counter overflows. Software
+// should use the WRMSR instruction to load the count as a
+// two’s-comple- ment negative number into the performance
+// counter. This causes the counter to overflow after counting the
+// appropriate number of times.
+
+//  In addition to the RDMSR instruction, the PERF_CTR[5:0] registers
+//  can be read using a special read perfor- mance-monitoring counter
+//  instruction, RDPMC.
+
+//  The accuracy of the performance counters is not ensured. The
+//  performance counters are not assured of produc- ing identical
+//  measurements each time they are used to measure a particular
+//  instruction sequence, and they should not be used to take
+//  measurements of very small instruction sequences. The RDPMC
+//  instruction is not serializing, and it can be executed
+//  out-of-order with respect to other instructions around it. Even
+//  when bound by serializing instructions, the system environment at
+//  the time the instruction is executed can cause events to be
+//  counted before the counter value is loaded into EDX:EAX.
+
+static inline
+uint64_t rdpmc(int reg)
+{
+  uint32_t lo, hi;
+  /* asm volatile ("xorl %%eax, %%eax\n\t" */
+  /*               "cpuid" */
+  /*               : */
+  /*               : */
+  /*               : "%rax", "%rbx", "%rcx", "%rdx"); */
+
+  asm volatile ("rdpmc"
+                : "=a" (lo),
+                  "=d" (hi)
+                : "c" (reg));
+
+  /* asm volatile ("xorl %%eax, %%eax\n\t" */
+  /*               "cpuid" */
+  /*               : */
+  /*               : */
+  /*               : "%rax", "%rbx", "%rcx", "%rdx"); */
+
+  return (uint64_t)hi << 32 | lo;
+}
+
+static void
+pmc_init()
+{
+    perf_event_select event_sel;
+    event_sel.val = 0;
+    event_sel.eventselect_7_0 = PMC_CLOCKS_NOT_HALTED;
+    event_sel.osusermode = 3; //count all events irrespective of cpl
+    event_sel.en = 1;
+
+    asm volatile ("wrmsr"
+                  :
+                  : "a" (event_sel.val & 0xFFFFFFFF),
+                    "d" (event_sel.val >> 32),
+                    "c" (0xC0010200));
+}
+
+static inline uint64_t
+rdpmctsc(void)
+{
+  return rdpmc(0);
+}
+static inline uint64_t
+rdpmcisc(void)
+{
+  return rdpmc(1);
+}
+
+int pmc_test()
+{ 
+#ifdef __EBBRT_BM__
+    uint64_t tsc_start, tsc_end, isc_start, isc_end;
+    pmc_init();
+
+    isc_start = rdpmcisc();
+    tsc_start = rdpmctsc(); 
+    for (volatile int i=0; i<100000; i++) nullfunc();
+    tsc_end = rdpmctsc(); 
+    isc_end = rdpmcisc();
+    MY_PRINT("tsc_start= %" PRIu64 " tsc_end= %" PRIu64 " (%" PRIu64")\n"
+	     "isc_start= %" PRIu64 " isc_end= %" PRIu64 " (%" PRIu64")\n",
+	     tsc_start, tsc_end, (tsc_end - tsc_start),
+	     isc_start, isc_end, (isc_end - isc_start));
+#endif
+    return 1;
+}
+#endif
+
 void AppMain()
 {
   int rc=0;
@@ -1169,6 +1356,10 @@ void AppMain()
   if (!init(&args)) goto DONE;
 
   MY_PRINT("_UBENCH_BENCHMARKS_: Start\n");  
+
+#ifdef _PMC_TEST_
+  rc+=pmc_test();
+#endif
 
 #ifndef __STANDALONE__
   rc+=cmdline_test(&args);

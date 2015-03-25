@@ -85,11 +85,14 @@ public:
       y (29)
     {}
 
+#ifdef __MY_NOINLINE__
+  static void* __attribute((noinline)) new[](size_t sz) { return malloc(sz); }
+  static void __attribute((noinline)) delete[](void* ptr) { free(ptr); }
+#endif
+
   int x;
   int y;
 };
-
-
 
 void worker (void)
 {

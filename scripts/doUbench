@@ -38,6 +38,57 @@ EBBRTBM=apps/ubench/baremetal/build/Release/ubench.elf32
 # THE ACTUAL EXPERIMENT COMMANDS
 
 if [[ -z $EXP_DOTIMING ]]; then
+
+if [[ $EXP_DO = "nullobject" ]]; then
+
+LINUXNRUN='
+export EBBRT_NODE_ALLOCATOR_DEFAULT_CPUS=$MAXPROCESSORS;
+for ((i=0; i<$RUNS; i++)); do 
+   $EXEC -R $REPEAT -o;
+done > $LINUXNOUT'
+
+elif [[ $EXP_DO = "spawn" ]]; then
+
+LINUXNRUN='
+export EBBRT_NODE_ALLOCATOR_DEFAULT_CPUS=$MAXPROCESSORS;
+for ((i=0; i<$RUNS; i++)); do 
+   for p in 1 2 4 6 8 10 12; do  
+     $EXEC -P $p -R $REPEAT -A 100 -s;
+   done;
+done > $LINUXNOUT'
+
+elif [[ $EXP_DO = "hoardscale" ]]; then
+
+LINUXNRUN='
+export EBBRT_NODE_ALLOCATOR_DEFAULT_CPUS=$MAXPROCESSORS;
+for ((i=0; i<$RUNS; i++)); do 
+   for ((p=1; p<=$MAXPROCESSORS; p++)); do  
+     $EXEC -m -- hoardthreadtest $p 50 $((p*30000));
+   done;
+done > $LINUXNOUT'
+
+elif [[ $EXP_DO = "hoard" ]]; then
+
+LINUXNRUN='
+export EBBRT_NODE_ALLOCATOR_DEFAULT_CPUS=$MAXPROCESSORS;
+for ((i=0; i<$RUNS; i++)); do 
+   for ((p=1; p<=$MAXPROCESSORS; p++)); do  
+     $EXEC -m -- hoardthreadtest $p;
+   done;
+done > $LINUXNOUT'
+
+elif [[ $EXP_DO = "hoardchurn" ]]; then
+
+LINUXNRUN='
+export EBBRT_NODE_ALLOCATOR_DEFAULT_CPUS=$MAXPROCESSORS;
+for ((i=0; i<$RUNS; i++)); do 
+   for p in 1 2 4 6 8 10 12; do  
+     $EXEC -m -- hoardthreadtest $p 30000 $((p*10));
+   done;
+done > $LINUXNOUT'
+
+else
+
 LINUXNRUN='
 export EBBRT_NODE_ALLOCATOR_DEFAULT_CPUS=$MAXPROCESSORS;
 for ((i=0; i<$RUNS; i++)); do 
@@ -52,6 +103,9 @@ for ((i=0; i<$RUNS; i++)); do
      $EXEC -m -- hoardthreadtest $p;
    done;
 done > $LINUXNOUT'
+
+fi
+
 else
 LINUXNRUN='
 export EBBRT_NODE_ALLOCATOR_DEFAULT_CPUS=$MAXPROCESSORS;
@@ -70,6 +124,25 @@ fi
 # LINUXVM
 
 if [[ -z $EXP_DOTIMING ]]; then
+if [[ $EXP_DO = "nullobject" ]]; then
+LINUXVMRUN="
+export EBBRT_NODE_ALLOCATOR_DEFAULT_CPUS=\$MAXPROCESSORS;
+for ((i=0; i<\$RUNS; i++)); do 
+   \$MYDIR/scripts/qemubench \$RUNDIR \$VMKERNEL \$VMINITRD \"EXPCMD='$VMEXEC -R \$REPEAT -o' console=ttyS0 ro 1 quiet \";
+   fin=\$(cat \$RUNDIR/finish); cat \$RUNDIR/stdout; kill=\$(kill \$(cat \$RUNDIR/pid));
+done > \$LINUXVMOUT; "
+elif [[ $EXP_DO = "hoardscale" ]]; then
+LINUXVMRUN="
+export EBBRT_NODE_ALLOCATOR_DEFAULT_CPUS=\$MAXPROCESSORS;
+for ((i=0; i<\$RUNS; i++)); do 
+  for ((p=1; p<=\$MAXPROCESSORS; p++)); do  
+     export CORES=\$p;
+     \$MYDIR/scripts/qemubench \$RUNDIR \$VMKERNEL \$VMINITRD \"EXPCMD='$VMEXEC -m -- hoardthreadtest \$p 50 \$((p*30000))' console=ttyS0 ro 1 quiet \";
+     fin=\$(cat \$RUNDIR/finish); cat \$RUNDIR/stdout; kill=\$(kill \$(cat \$RUNDIR/pid));
+  done;
+done > \$LINUXVMOUT; "
+
+else
 LINUXVMRUN="
 export EBBRT_NODE_ALLOCATOR_DEFAULT_CPUS=\$MAXPROCESSORS;
 for ((i=0; i<\$RUNS; i++)); do 
@@ -94,6 +167,7 @@ for ((i=0; i<\$RUNS; i++)); do
 
   done;
 done > \$LINUXVMOUT; "
+fi
 else
 LINUXVMRUN="
 export EBBRT_NODE_ALLOCATOR_DEFAULT_CPUS=\$MAXPROCESSORS;
@@ -119,6 +193,54 @@ fi
 # EBBRT
 
 if [[ -z $EXP_DOTIMING ]]; then
+if [[ $EXP_DO = "nullobject" ]]; then
+EBBRTRUN="
+export EBBRT_NODE_ALLOCATOR_DEFAULT_CPUS=\$MAXPROCESSORS;
+for ((i=0; i<\$RUNS; i++)); do 
+   \$MYDIR/scripts/qemubench \$RUNDIR \$EBBRTBM /dev/null \" -R \$REPEAT -o\";
+     fin=\$(cat \$RUNDIR/finish); cat \$RUNDIR/stdout; 
+done > \$EBBRTOUT"
+elif [[ $EXP_DO = "spawn" ]]; then
+EBBRTRUN="
+export EBBRT_NODE_ALLOCATOR_DEFAULT_CPUS=\$MAXPROCESSORS;
+for ((i=0; i<\$RUNS; i++)); do 
+   for p in 1 2 4 6 8 10 12; do
+     export CORES=\$p;
+     \$MYDIR/scripts/qemubench \$RUNDIR \$EBBRTBM /dev/null \"-P \$p -R \$REPEAT -A 100 -s\";
+     fin=\$(cat \$RUNDIR/finish); cat \$RUNDIR/stdout; 
+   done;
+done > \$EBBRTOUT"
+elif [[ $EXP_DO = "hoardscale" ]]; then
+EBBRTRUN="
+export EBBRT_NODE_ALLOCATOR_DEFAULT_CPUS=\$MAXPROCESSORS;
+for ((i=0; i<\$RUNS; i++)); do 
+   for ((p=1; p<=\$MAXPROCESSORS; p++)); do  
+     export CORES=\$p;
+     \$MYDIR/scripts/qemubench \$RUNDIR \$EBBRTBM /dev/null \"-m -- hoardthreadtest \$p 50 \$((p*30000))\";
+     fin=\$(cat \$RUNDIR/finish); cat \$RUNDIR/stdout; 
+   done;
+done > \$EBBRTOUT"
+elif [[ $EXP_DO = "hoard" ]]; then
+EBBRTRUN="
+export EBBRT_NODE_ALLOCATOR_DEFAULT_CPUS=\$MAXPROCESSORS;
+for ((i=0; i<\$RUNS; i++)); do 
+   for ((p=1; p<=\$MAXPROCESSORS; p++)); do  
+     export CORES=\$p;
+     \$MYDIR/scripts/qemubench \$RUNDIR \$EBBRTBM /dev/null \"-m -- hoardthreadtest \$p\";
+     fin=\$(cat \$RUNDIR/finish); cat \$RUNDIR/stdout; 
+   done;
+done > \$EBBRTOUT"
+elif [[ $EXP_DO = "hoardchurn" ]]; then
+EBBRTRUN="
+export EBBRT_NODE_ALLOCATOR_DEFAULT_CPUS=\$MAXPROCESSORS;
+for ((i=0; i<\$RUNS; i++)); do 
+   for p in 1 2 4 6 8 10 12; do  
+     export CORES=\$p;
+     \$MYDIR/scripts/qemubench \$RUNDIR \$EBBRTBM /dev/null \"-m -- hoardthreadtest \$p 30000 \$((p*10))\";
+     fin=\$(cat \$RUNDIR/finish); cat \$RUNDIR/stdout; 
+   done;
+done > \$EBBRTOUT"
+else
 EBBRTRUN="
 export EBBRT_NODE_ALLOCATOR_DEFAULT_CPUS=\$MAXPROCESSORS;
 for ((i=0; i<\$RUNS; i++)); do 
@@ -142,6 +264,7 @@ for ((i=0; i<\$RUNS; i++)); do
      fin=\$(cat \$RUNDIR/finish); cat \$RUNDIR/stdout; 
    done;
 done > \$EBBRTOUT"
+fi
 else
 EBBRTRUN="
 export EBBRT_NODE_ALLOCATOR_DEFAULT_CPUS=\$MAXPROCESSORS;
