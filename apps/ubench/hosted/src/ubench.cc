@@ -24,8 +24,8 @@
 #include <ebbrt/Runtime.h>
 #include <stdio.h>
 
-#include "../../src/ubenchCommon.h"
 #include "../../src/Cpu.h"
+#include "../../src/ubenchCommon.h"
 #include "../../src/Unix.h"
 
 void Main(void);
