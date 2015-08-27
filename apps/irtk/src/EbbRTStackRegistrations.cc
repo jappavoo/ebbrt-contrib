@@ -1,8 +1,8 @@
 #include "EbbRTStackRegistrations.h"
 
 void
-ParallelStackRegistrations::operator() (const blocked_range<size_t> &r) const {
-  for (size_t i = r.begin(); i != r.end(); ++i) {
+EbbRTStackRegistrations::operator() (const blocked_range<size_t> &r) const {
+  for (int i = r.begin(); i != r.end(); ++i) {
     
     //do not perform registration for template
     if (i == templateNumber)
@@ -43,7 +43,7 @@ ParallelStackRegistrations::operator() (const blocked_range<size_t> &r) const {
     //stack_transformations[i] = transformation;            
 
     //save volumetric registrations
-    if (reconstructor->_debug) {
+    /*if (reconstructor->_debug) {
       //buffer to create the name
       char buffer[256];
       registration.irtkImageRegistration::Write((char *) "parout-volume.rreg");
@@ -52,14 +52,15 @@ ParallelStackRegistrations::operator() (const blocked_range<size_t> &r) const {
       target.Write("target.nii.gz");
       sprintf(buffer, "stack%i.nii.gz", i);
       stacks[i].Write(buffer);
-    }
+      }*/
   }
 }
 
 // execute
 void 
-ParallelStackRegistrations::operator() () const {
-  task_scheduler_init init(tbb_no_threads);
+EbbRTStackRegistrations::operator() () const {
+    //task_scheduler_init init(tbb_no_threads);
+    task_scheduler_init init(1);
   parallel_for(blocked_range<size_t>(0, stacks.size()),
 	       *this);
   init.terminate();

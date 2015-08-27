@@ -12,7 +12,7 @@
 #include <stdlib.h>
 #include "utils.h"
 
-class ParallelStackRegistrations {
+class EbbRTStackRegistrations {
   irtkReconstruction *reconstructor;
   vector<irtkRealImage>& stacks;
   vector<irtkRigidTransformation>& stack_transformations;
@@ -21,7 +21,7 @@ class ParallelStackRegistrations {
   irtkRigidTransformation& offset;
   bool _externalTemplate;
   public:
-  ParallelStackRegistrations(irtkReconstruction *_reconstructor,
+  EbbRTStackRegistrations(irtkReconstruction *_reconstructor,
 			     vector<irtkRealImage>& _stacks,
 			     vector<irtkRigidTransformation>& _stack_transformations,
 			     int _templateNumber,
