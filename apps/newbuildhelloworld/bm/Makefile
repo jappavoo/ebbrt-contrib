@@ -7,21 +7,21 @@ target := helloworld.elf
 .PHONY: clean all
 
 # stuff to remove
-LIBS := -lebbrt 
-LIBS += -lcapnp -lkj -lacpica -ltbb 
-LIBS += -lstdc++ -lsupc++ -lgcc -lc 
-LIBS += -lg
-LIBS += -lnosys 
-LIBS += -lebbrt
+#LIBS := -lebbrt 
+#LIBS += -lcapnp -lkj -lacpica -ltbb 
+#LIBS += -lstdc++ -lsupc++ -lgcc -lc 
+#LIBS += -lg
+#LIBS += -lnosys 
+#LIBS += -lebbrt
 
-LDFLAGS := -nostartfiles
+#LDFLAGS := -nostartfiles
 LDFLAGS += -T /home/jappavoo/Work/BuildSystem/EbbRT/baremetal/src/ebbrt.ld 
 LDFLAGS += -Wl,-n,-z,max-page-size=0x1000
 
 all: $(target)
 
 $(target): $(objs)
-	  ${CXX} $(objs) ${LIBS} ${LDFLAGS} -o helloworld.elf
+	  ${CXX} -v $(objs) ${LIBS} ${LDFLAGS} -o helloworld.elf
 
 clean:
 	${RM} $(wildcard $(objs) helloworld.elf)
