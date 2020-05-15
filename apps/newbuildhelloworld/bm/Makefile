@@ -14,14 +14,14 @@ target := helloworld.elf
 #LIBS += -lnosys 
 #LIBS += -lebbrt
 
-#LDFLAGS := -nostartfiles
+LDFLAGS := -nostartfiles
 LDFLAGS += -T /home/jappavoo/Work/BuildSystem/EbbRT/baremetal/src/ebbrt.ld 
-LDFLAGS += -Wl,-n,-z,max-page-size=0x1000
+#LDFLAGS += -Wl,-n,-z,max-page-size=0x1000
 
 all: $(target)
 
 $(target): $(objs)
-	  ${CXX} -v $(objs) ${LIBS} ${LDFLAGS} -o helloworld.elf
+	  ${CXX}  $(objs) ${LIBS} ${LDFLAGS} -o helloworld.elf
 
 clean:
 	${RM} $(wildcard $(objs) helloworld.elf)
