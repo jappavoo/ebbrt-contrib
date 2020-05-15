@@ -1,0 +1,20 @@
+setparams 'Debian GNU/Linux'
+
+load_video
+insmod gzio
+insmod part_gpt
+insmod ext2
+set_root='hd1,gpt2'
+if [ x$feature_platform_search_hint = xy ]; then 
+  search --no-floppy --fs-uuid --set=root --hint-bios=hd0,gpt2
+  --hint-efi=hd0,gpt2 --hint-baremetal=ahci0,gpt2 --hint='hd1,gpt2'
+  bb14f098-9e82-454a-96d6-227910a4d0bd
+else
+search --no-floppy --fs-uuid --set=root bb14f098-9e82-454a-96d6-227910a4d0bd
+
+
+echo        'Loading Linux 3.16-2-amd64 ...'
+linux  /vmlinuz-3.16-2-amd64 root=/dev/mapper/debian-root ro  console=tty0 console=ttyS1,115200
+echo        'Loading initial ramdisk ...'
+initrd /initrd.img-3.16-2-amd64
+

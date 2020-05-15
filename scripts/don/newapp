@@ -1,0 +1,92 @@
+#!/bin/bash
+#set -x
+
+exec=$1
+libdir=$2
+linuxrel=$(uname -r)
+kernel=/boot/vmlinuz-${linuxrel}
+baseinitrd=/boot/initrd.img-${linuxrel}
+
+if [[ -z $exec ]]; then
+  echo "ERROR: must specify executable" > /dev/stderr
+  exit -1
+fi
+
+dir=$(pwd)/$(basename $exec).d
+
+if [[ -a $dir ]]; then
+  echo "ERROR: $dir already exists please remove to rebuild" > /dev/stderr
+  exit -1
+fi
+if [[ ! -a $kernel ]]; then
+  echo "ERROR: can't file KERNEL:$kernel" > /dev/stderr
+  exit -1
+fi
+if [[ ! -a $baseinitrd ]]; then
+  echo "ERROR: can't file base INITRD:$baseinitrd" > /dev/stderr
+  exit -1
+fi
+if ! file $kernel; then
+  echo "ERROR: can not access $kernel "
+  exit -1
+fi
+
+echo "Created $dir "
+mkdir $dir
+
+# copy in current kernel
+if ! cp $kernel $dir; then
+  echo "ERROR: cp $kernel $dir failed"
+  exit -1
+fi
+chmod 744 $dir/vmlinuz-${linuxrel}
+
+# copy in initrd
+mkdir $dir/root
+(cd $dir/root; gunzip -c $baseinitrd | cpio -id)
+
+# load dependencies
+LD_TRACE_LOADED_OBJECTS=1 LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$libdir $exec > $dir/deps 
+files=$(readlink -e $exec)
+cat $dir/deps | while read line; do line=${line#*/}; echo /${line%% *}; done | grep -v 'linux-vdso.so' > $dir/files
+echo $files >> $dir/files
+mkdir $dir/root/app
+cp -aL -t $dir/root/app $(cat $dir/files)
+
+# default kernel arguments
+echo "console=ttyS1 console=tty0 rdinit=/app/init" > $dir/cmdlineargs
+
+# default config script
+cat  >$dir/root/app/init <<EOF 
+#!/bin/sh
+echo "Run app init script..."
+
+[ -d /dev ] || mkdir -m 0755 /dev
+[ -d /root ] || mkdir -m 0700 /root
+[ -d /sys ] || mkdir /sys
+[ -d /proc ] || mkdir /proc
+[ -d /tmp ] || mkdir /tmp
+mkdir -p /var/lock
+mount -t sysfs -o nodev,noexec,nosuid sysfs /sys
+mount -t proc -o nodev,noexec,nosuid proc /proc
+# Some things don't work properly without /etc/mtab.
+ln -sf /proc/mounts /etc/mtab
+
+grep -q '\<quiet\>' /proc/cmdline || echo "Loading, please wait..."
+
+# Note that this only becomes /dev on the real filesystem if udev's scripts
+# are used; which they will be, but it's worth pointing out
+if ! mount -t devtmpfs -o mode=0755 udev /dev; then
+	echo "W: devtmpfs not available, falling back to tmpfs for /dev"
+	mount -t tmpfs -o mode=0755 udev /dev
+	[ -e /dev/console ] || mknod -m 0600 /dev/console c 5 1
+	[ -e /dev/null ] || mknod /dev/null c 1 3
+fi
+mkdir /dev/pts
+mount -t tmpfs -o "noexec,nosuid,size=10%,mode=0755" tmpfs /run
+
+export LD_LIBRARY_PATH=/app
+# custom commands go here...
+EOF
+chmod +x $dir/root/app/init
+

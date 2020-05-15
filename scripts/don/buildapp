@@ -1,0 +1,16 @@
+#!/bin/bash
+#set -x
+
+dir=$1
+libdir=$2
+linuxrel=$(uname -r)
+
+if [[ ! -d $dir ]]; then
+  echo "ERROR: must specify app directory to modify" > /dev/stderr
+  exit -1
+fi
+
+dir=$(readlink -f $dir)
+(cd $dir/root; find . | cpio --create --format='newc' | gzip -c > $dir/initrd.img.$linuxrel)
+
+echo "$1 finished."

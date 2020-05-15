@@ -1,0 +1,30 @@
+#!/bin/bash
+#set -x
+
+dir=$1
+exec=$2
+libdir=$3
+linuxrel=$(uname -r)
+
+if [[ ! -d $dir ]]; then
+  echo "ERROR: must specify app directory to modify" > /dev/stderr
+  exit -1
+fi
+
+if [[ -z $exec ]]; then
+  echo "ERROR: must specify executable" > /dev/stderr
+  exit -1
+fi
+
+deps=deps_$(basename $exec)
+files=files_$(basename $exec)
+
+LD_TRACE_LOADED_OBJECTS=1 LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$libdir $exec > $dir/$deps
+cat $dir/$deps | while read line; do line=${line#*/}; echo /${line%% *}; done | grep -v 'linux-vdso.so' > $dir/$files
+echo $(readlink -e $exec) >> $dir/$files
+cp -aL -t $dir/root/app $(cat $dir/$files)
+
+
+echo "$2 added"
+
+

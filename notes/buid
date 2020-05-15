@@ -1,0 +1,20 @@
+tool chain can be downloaded from github
+
+See toplevel makefile there are a set of env variables to control where things will get installed
+
+
+ 2384  mkdir tmp;cd tmp;wget https://github.com/SESA/EbbRT/releases/download/v0.1.0-sysroot/ebbrt-sysroot.x86_64.tar.gz
+ 2398  EBBRT_SYSROOT=$PWD/tmp/ebbrt make -j 8 native
+ 2399  EBBRT_SYSROOT=$PWD/tmp/ebbrt make -j 8 native-install
+ 2402  mkdir tmp/hosted;PREFIX=$PWD/tmp/hosted make -j 8 hosted
+ 2404  mkdir tmp/hosted;PREFIX=$PWD/tmp/hosted make -j 8 hosted-install
+ 2411  cd apps/helloworld
+ 2415  EBBRT_SYSROOT=$HOME/Work/EbbRT/tmp/ebbrt CMAKE_PREFIX_PATH=$HOME/Work/EbbRT/tmp/hosted make 
+
+the above will create build directories if you don't do anything special these will appear in the
+directory you ran the above commands eg.
+$ ls
+BUILD.md         LICENSE   README.md  contrib  hosted_build  misc          src  toolchain
+CONTRIBUTING.md  Makefile  apps       doc      libs          native_build  tmp
+
+See makefile to override locations

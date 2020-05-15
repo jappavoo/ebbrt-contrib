@@ -1,0 +1,1 @@
+sudo fence_apc --action=reboot --ip=192.168.1.32 --plug=1 --username=jappavoo --password=ooNg4uod

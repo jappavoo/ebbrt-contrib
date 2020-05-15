@@ -1,0 +1,93 @@
+#!/bin/bash
+#set -x
+
+function build {
+   dir=$1
+   type=$2
+
+   if [[ $type != Debug && $type != Release ]]; then
+       echo "ERROR: type must be Debug or Release"
+       exit -1
+   fi
+
+   prefix=${dir}/${type}
+
+   # create directories as needed
+   [[ ! -d ${prefix}/build/native ]] && mkdir -p ${prefix}/build/native
+   [[ ! -d ${prefix}/build/hosted ]] && mkdir -p ${prefix}/build/hosted
+   [[ ! -d ${prefix}/sysroot ]] && mkdir -p ${prefix}/sysroot
+   [[ ! -d ${prefix}/install ]] && mkdir -p ${prefix}/install
+
+   [[ $type == "Release" ]] && extra="DEBUG=1"
+
+   # native build and install
+   make -k -j -C ${prefix}/build/native -f ${dir}/toolchain/Makefile SYSROOT=${prefix}/sysroot ${extra}
+
+   # hosted build and install
+   ( cd ${prefix}/build/hosted; cmake -DCMAKE_BUILD_TYPE=${type} -DCMAKE_INSTALL_PREFIX=${prefix}/install ${dir}/src )
+   make -k -j -C ${prefix}/build/hosted install
+}
+
+function usage 
+{
+   echo "USAGE: $0 <checkout|build|update|fastbuild|dist-clean> [full path to ebbrt checkout or parent in case of checkout cmd (defaults to pwd)]"
+}
+
+cmd=$1
+dir=$2
+
+if [[ -z $cmd ]]; then 
+  usage
+  exit -1
+fi
+
+if [[ -z $dir ]]; then
+  dir=$(pwd)
+fi
+
+if [[ $cmd == clone ]]; then
+
+   if [[ ! -d $dir ]]; then
+      echo "ERROR: $dir does not exists"
+      exit -1
+   fi
+
+   if [[ -a $dir/EbbRT ]]; then
+       echo "ERROR: $dir/EbbRT already exists"
+       exit -1
+   fi
+
+   ( cd $dir; git clone --recursive git@github.com:SESA/EbbRT.git )
+   exit $?
+fi
+
+if [[ ! -a $dir/src/EbbId.h ]]; then
+  usage
+  echo "$dir does not seem to be an EbbRT checkout"
+  exit -1
+fi
+
+if [[ $cmd == build ]]; then
+  build $dir Release 
+  build $dir Debug 
+  exit 0
+fi
+
+if [[ $cmd == "fastbuild" ]]; then
+  make -C /home/jappavoo/EbbRT/Release/build/hosted install -j
+  make -C /home/jappavoo/EbbRT/Release/build/native/build/ebbrt-build -j  install
+  make -C /home/jappavoo/EbbRT/Debug/build/hosted  -j install
+  make -C /home/jappavoo/EbbRT/Debug/build/native/build/ebbrt-build -j  install
+fi
+
+if [[ $cmd == update ]]; then
+    (cd $dir; git pull)
+    ebbrt build    
+   exit -1
+fi
+
+if [[ $cmd == dist-clean ]]; then
+  [[ -d $dir/Release ]] && rm -rf $dir/Release
+  [[ -d $dir/Debug ]] && rm -rf $dir/Debug
+  exit 0
+fi
