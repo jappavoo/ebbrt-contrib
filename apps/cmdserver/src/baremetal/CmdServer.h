@@ -10,7 +10,7 @@
 #include <ebbrt/Message.h>
 #include "../../src/StaticEbbIds.h"
 
-class CmdServer : public ebbrt::Messagable<CmdServer> {
+class CmdServer  {
   class InConnection : public ebbrt::TcpHandler {
   public:
     explicit InConnection(ebbrt::NetworkManager::TcpPcb pcb);
@@ -23,11 +23,7 @@ class CmdServer : public ebbrt::Messagable<CmdServer> {
     ~InConnection();
   };
   class OutConnection : public ebbrt::TcpHandler {
-#if 1
     ebbrt::EventManager::EventContext& context_;
-#else
-    ebbrt::Promise<int> *promise_;
-#endif
     enum STATE { NONE, BLOCKED, SUCCESS, ERROR } state_;
   public:
     explicit OutConnection(ebbrt::NetworkManager::TcpPcb pcb,
@@ -47,15 +43,10 @@ class CmdServer : public ebbrt::Messagable<CmdServer> {
     ~OutConnection();
   };
  public:
-  explicit CmdServer(ebbrt::Messenger::NetworkId nid);
+  explicit CmdServer();
 
   static CmdServer& HandleFault(ebbrt::EbbId id);
 
-  void Print(const char* string);
-  void Print(const char* bytes, size_t len);
-  
-  void ReceiveMessage(ebbrt::Messenger::NetworkId nid,
-                      std::unique_ptr<ebbrt::IOBuf>&& buffer);
   void Send(ebbrt::Ipv4Address address,
 	    uint16_t port,
 	    const char *bytes, size_t len);
@@ -66,7 +57,6 @@ class CmdServer : public ebbrt::Messagable<CmdServer> {
   ebbrt::NetworkManager::ListeningTcpPcb listening_pcb_;
   uint16_t port_;
   static const size_t BUFSIZE=4096;
-  ebbrt::Messenger::NetworkId remote_nid_;
   char buffer_[BUFSIZE];
   size_t bufLen_;
 };

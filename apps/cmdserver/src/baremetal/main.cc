@@ -3,6 +3,7 @@
 //    (See accompanying file LICENSE_1_0.txt or copy at
 //          http://www.boost.org/LICENSE_1_0.txt)
 
+#include "Printer.h"
 #include "CmdServer.h"
 
 void AppMain() {
@@ -23,7 +24,7 @@ void AppMain() {
 	   (naddr >> 8) & 0xff,
 	   (naddr) & 0xff);
   
-  cmdServer->Print(buf, strlen(buf));
+  printer->Print(buf);
   cmdServer->Send(ebbrt::Ipv4Address(naddr),port,"Cmd\n", 4);
   cmdServer->StartListening(port);
 }

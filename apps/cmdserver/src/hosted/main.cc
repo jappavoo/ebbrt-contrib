@@ -11,7 +11,7 @@
 #include <ebbrt/Cpu.h>
 #include <ebbrt/hosted/NodeAllocator.h>
 
-#include "CmdServer.h"
+#include "Printer.h"
 
 static char* ExecName = 0;
 static int NumNodes;
@@ -23,7 +23,7 @@ void AppMain() {
 
   struct timeval START_TIME;
   gettimeofday(&START_TIME, NULL);
-  CmdServer::Init().Then([bindir, START_TIME](ebbrt::Future<void> f) {
+  Printer::Init().Then([bindir, START_TIME](ebbrt::Future<void> f) {
     f.Get();
     try {
       for (int i = 0; i < NumNodes; i++) {

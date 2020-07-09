@@ -12,7 +12,24 @@
 #include <ebbrt/UniqueIOBuf.h>
 #include <ebbrt/EventManager.h>
 
-EBBRT_PUBLISH_TYPE(, CmdServer);
+#define DEBUG_WITH_PRINTER
+
+#ifdef DEBUG_WITH_PRINTER
+#include "Printer.h"
+#define DPrint printer->Print
+#define DPrintf(fmt, ...) {						\
+  char dpbuf[255];							\
+  snprintf(dpbuf,  sizeof(dpbuf), "%s: " fmt, __func__, __VA_ARGS__);	\
+  DPrint(dpbuf);						\
+}
+#else
+#define DPrint
+#define DPrintf(...)
+#endif
+
+#include "Printer.h"
+#define Print printer->Print
+
 
 namespace ebbrt {
   class StaticIOBufWithDisposalOwner {
@@ -42,8 +59,7 @@ namespace ebbrt {
 }
 typedef ebbrt::StaticIOBufWithDisposal IOBuf;
 
-CmdServer::CmdServer(ebbrt::Messenger::NetworkId nid)
-    : Messagable<CmdServer>(kCmdServerEbbId), remote_nid_(std::move(nid)) {}
+CmdServer::CmdServer()  {}
 
 CmdServer& CmdServer::HandleFault(ebbrt::EbbId id) {
   {
@@ -60,7 +76,7 @@ CmdServer& CmdServer::HandleFault(ebbrt::EbbId id) {
   auto f = ebbrt::global_id_map->Get(id);
   CmdServer* p;
   f.Then([&f, &context, &p](ebbrt::Future<std::string> inner) {
-    p = new CmdServer(ebbrt::Messenger::NetworkId(inner.Get()));
+    p = new CmdServer();
     ebbrt::event_manager->ActivateContext(std::move(context));
   });
   ebbrt::event_manager->SaveContext(context);
@@ -77,19 +93,6 @@ CmdServer& CmdServer::HandleFault(ebbrt::EbbId id) {
   auto& pr = *boost::any_cast<CmdServer*>(accessor->second);
   ebbrt::EbbRef<CmdServer>::CacheRef(id, pr);
   return pr;
-}
-
-void CmdServer::Print(const char* str) {
-  auto len = strlen(str) + 1;
-  auto buf = ebbrt::MakeUniqueIOBuf(len);
-  snprintf(reinterpret_cast<char*>(buf->MutData()), len, "%s", str);
-  SendMessage(remote_nid_, std::move(buf));
-}
-
-void CmdServer::Print(const char* bytes, size_t len) {
-  auto buf = ebbrt::MakeUniqueIOBuf(len);
-  memcpy(reinterpret_cast<char*>(buf->MutData()), bytes, len);
-  SendMessage(remote_nid_, std::move(buf));
 }
 
 void CmdServer::Do() {
@@ -121,77 +124,63 @@ CmdServer::InConnection::InConnection(ebbrt::NetworkManager::TcpPcb pcb)
 
 CmdServer::OutConnection::OutConnection(ebbrt::NetworkManager::TcpPcb pcb,
 				  ebbrt::EventManager::EventContext& context)
-#if 1
   : TcpHandler(std::move(pcb)), context_(context), state_(NONE) {}
-#else
-  : TcpHandler(std::move(pcb)), promise_(NULL), state_(NONE) {}
-#endif
+
 void CmdServer::OutConnection::Connected() {
   {
     uint32_t id=ebbrt::event_manager->GetEventId();
     char buf[80];
     snprintf(buf, sizeof(buf), "%s: %u\n", __FUNCTION__, id);
-    cmdServer->Print(buf,strlen(buf));
+    Print(buf,strlen(buf));
   }
   
-  cmdServer->Print("Connected\n");
-#if 1
+  Print("Connected\n");
   assert(state_ == BLOCKED);
   state_ = SUCCESS;
   ebbrt::event_manager->ActivateContext(std::move(context_));
-#else
-  assert(promise_);
-  cmdServer->Print("Connected: promise not null\n");
-  promise_->SetValue(1);
-  cmdServer->Print("Connected: promise value set to 1\n");
-#endif
 }
 
 void CmdServer::InConnection::Connected() {
-    cmdServer->Print("In Connected\n");
+    Print("In Connected\n");
 }
 
 void CmdServer::InConnection::Abort() {
-  cmdServer->Print("Abort\n");
+  Print("Abort\n");
 }
 
 
 void CmdServer::OutConnection::Abort() {
-  cmdServer->Print("Abort\n");
-#if 1
+  Print("Abort\n");
   if (state_ == BLOCKED) {
     state_ = ERROR;
     ebbrt::event_manager->ActivateContext(std::move(context_));
   }
-#else
-  if (promise_)  promise_->SetValue(0);
-#endif
 }
 
 void CmdServer::InConnection::Receive(std::unique_ptr<ebbrt::MutIOBuf> b) {
-  cmdServer->Print("In Receive\n");
+  Print("In Receive\n");
   cmdServer->Buffer(std::move(b));
 }
 
 void CmdServer::OutConnection::Receive(std::unique_ptr<ebbrt::MutIOBuf> b) {
-  cmdServer->Print("Out Receive???\n");
+  Print("Out Receive???\n");
 }
 
 CmdServer::InConnection::~InConnection() {
-  cmdServer->Print("CmdServer::InConnection::~InConnection DESTROYED\n");
+  Print("CmdServer::InConnection::~InConnection DESTROYED\n");
 }
 
 
 CmdServer::OutConnection::~OutConnection() {
-  cmdServer->Print("CmdServer::OutConnection::~OutConnection DESTROYED\n");
+  Print("CmdServer::OutConnection::~OutConnection DESTROYED\n");
 }
 
 void CmdServer::OutConnection::Close() {
-  cmdServer->Print("OutConnection::Close\n");
+  Print("OutConnection::Close\n");
 }
 
 void CmdServer::InConnection::Close() {
-  cmdServer->Print("InConnection::Close\n");
+  Print("InConnection::Close\n");
   cmdServer->Do();
   Shutdown();
   delete this;
@@ -212,35 +201,19 @@ int CmdServer::OutConnection::ConnectAndBlock(ebbrt::Ipv4Address address,
     uint32_t id=ebbrt::event_manager->GetEventId();
     char buf[80];
     snprintf(buf, sizeof(buf), "%s: %u\n", __FUNCTION__, id);
-    cmdServer->Print(buf,strlen(buf));
+    Print(buf,strlen(buf));
   }
   
   Install();
-#if 1
-  cmdServer->Print("Installed\n");
+
+  Print("Installed\n");
   // JA: FIXME:  There is a race here right ... assuming interupts on different cores
   Pcb().Connect(address, port);
-  cmdServer->Print("SavingContext\n");
+  Print("SavingContext\n");
   state_ = BLOCKED;
   ebbrt::event_manager->SaveContext(context_);
   if (state_ == SUCCESS) return 1;
   return 0;
-  
-#else
-  assert(promise_ == NULL);
-  promise_ = new ebbrt::Promise<int>;
-  auto f =promise_->GetFuture();
-  cmdServer->Print("Promise Created\n");
-  Pcb().Connect(address, port);
-  cmdServer->Print("Connect Called\n");
-  f.Block();
-  cmdServer->Print("After Block");
-  int val = f.Get();
-  char buf[80];
-  snprintf(buf, sizeof(buf), "f.Get=%d\n", val);
-  cmdServer->Print(buf, strlen(buf));
-  return val;
-#endif
 }
 
 int
@@ -249,7 +222,7 @@ CmdServer::OutConnection::SendAndBlock(const char *bytes,
   std::unique_ptr<IOBuf> buf = IOBuf::Create<IOBuf>
     (bytes, len, 
      [this]() {
-      cmdServer->Print("IOBuf::has been freed\n");
+      Print("IOBuf::has been freed\n");
       if (state_ == BLOCKED)  {
 	state_ = SUCCESS;
 	ebbrt::event_manager->ActivateContext(std::move(context_));
@@ -258,16 +231,16 @@ CmdServer::OutConnection::SendAndBlock(const char *bytes,
 
   char sbuf[80];
   snprintf(sbuf, sizeof(sbuf), "buf created: %s %lu\n", bytes, len);
-  cmdServer->Print(sbuf, strlen(sbuf));
+  Print(sbuf, strlen(sbuf));
 
   
   Send(std::move(buf));
-  cmdServer->Print("Connection Send called\n");
+  Print("Connection Send called\n");
   Pcb().Output();
-  cmdServer->Print("pcb Output called:  Blockeing\n");
+  Print("pcb Output called:  Blockeing\n");
   state_ = BLOCKED;
   ebbrt::event_manager->SaveContext(context_);
-  cmdServer->Print("Send Done\n");
+  Print("Send Done\n");
   if (state_ == SUCCESS) return len;
   return 0;
 }
@@ -306,7 +279,3 @@ void CmdServer::Send(ebbrt::Ipv4Address address,
   delete connection;
 }
 
-void CmdServer::ReceiveMessage(ebbrt::Messenger::NetworkId nid,
-                             std::unique_ptr<ebbrt::IOBuf>&& buffer) {
-  throw std::runtime_error("CmdServer: Received message unexpectedly!");
-}
