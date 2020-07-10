@@ -1,1 +1,1 @@
-EBBRT_SYSROOT=/home/jappavoo/Work/native_build/ebbrt/ CMAKE_PREFIX_PATH=/home/jappavoo/Work/hosted_build/ make VERBOSE=1 Debug 
+DEBUG=1 EBBRT_SYSROOT=/home/jappavoo/Work/native_build/ebbrt/ CMAKE_PREFIX_PATH=/home/jappavoo/Work/hosted_build/ make VERBOSE=1 DEBUG=1 Debug 
