@@ -3,7 +3,7 @@
 //    (See accompanying file LICENSE_1_0.txt or copy at
 //          http://www.boost.org/LICENSE_1_0.txt)
 #include "CmdServer.h"
-
+#include "Printer.h"
 #include <ebbrt/LocalIdMap.h>
 #include <ebbrt/GlobalIdMap.h>
 #include <ebbrt/UniqueIOBuf.h>
@@ -16,19 +16,17 @@
 
 #ifdef DEBUG_WITH_PRINTER
 #include "Printer.h"
-#define DPrint printer->Print
+#define DPrint ebbrt::kprintf
 #define DPrintf(fmt, ...) {						\
-  char dpbuf[255];							\
-  snprintf(dpbuf,  sizeof(dpbuf), "%s: " fmt, __func__, __VA_ARGS__);	\
-  DPrint(dpbuf);						\
+    uint32_t eid=ebbrt::event_manager->GetEventId();                     \
+    char dpbuf[1024];							\
+    snprintf(dpbuf,  sizeof(dpbuf), "%u: %s: " fmt, eid, __func__, __VA_ARGS__); \
+    ebbrt::kprintf(dpbuf);						\
 }
 #else
 #define DPrint
 #define DPrintf(...)
 #endif
-
-#include "Printer.h"
-#define Print printer->Print
 
 
 namespace ebbrt {
@@ -96,15 +94,23 @@ CmdServer& CmdServer::HandleFault(ebbrt::EbbId id) {
 }
 
 void CmdServer::Do() {
-  char buf[1024];
-  snprintf(buf, sizeof(buf),"Do: bufLen:%lu: ", bufLen_);
-  Print(buf);
-  Print(buffer_,bufLen_);
+  DPrintf("Do: bufLen:%lu: \n", bufLen_);
+  DPrint(buffer_,bufLen_);
+  static uint32_t addr = ebbrt::runtime::Frontend();
+  static uint16_t port = 8090;
+  static uint32_t naddr = ((addr >> 24) & 0xff) |
+    (((addr >> 16) & 0xff) << 8) |
+    (((addr >> 8) & 0xff) << 16) |
+    ((addr & 0xff) << 24);
+  static ebbrt::Ipv4Address eaddr(naddr);
+  
+  cmdServer->Send(eaddr,port,buffer_, bufLen_);
+  
   bufLen_=0;
 }
 
 void CmdServer::Buffer(std::unique_ptr<ebbrt::MutIOBuf> b) {
-  char buf[1024];
+  DPrintf("START: MutIOBuf: %p\n", this);
   auto dp = b->GetMutDataPointer();
   auto len = b->Length();
 
@@ -113,44 +119,59 @@ void CmdServer::Buffer(std::unique_ptr<ebbrt::MutIOBuf> b) {
   memcpy(&buffer_[bufLen_],dp.Data(),len);
   bufLen_ += len;
   
-  snprintf(buf, sizeof(buf),"MutIOBuf: len:%lu bufLen:%lu\n", len, bufLen_);
-  Print(buf);
+  DPrintf("END: MutIOBuf: len:%lu bufLen:%lu\n", len, bufLen_);
+}
+
+void CmdServer::Buffer(ebbrt::MutIOBuf *b) {
+  DPrintf("START: *  MutIOBuf: %p\n", this);
+  auto dp = b->GetMutDataPointer();
+  auto len = b->Length();
+
+  assert(len < (BUFSIZE - bufLen_));
   
+  memcpy(&buffer_[bufLen_],dp.Data(),len);
+  bufLen_ += len;
+  
+  DPrintf("END: * MutIOBuf: len:%lu bufLen:%lu\n", len, bufLen_);
 }
 
 CmdServer::InConnection::InConnection(ebbrt::NetworkManager::TcpPcb pcb)
-  : TcpHandler(std::move(pcb)) {}
+  : TcpHandler(std::move(pcb)) {
+  DPrintf("%p\n", this);
+}
 
 
 CmdServer::OutConnection::OutConnection(ebbrt::NetworkManager::TcpPcb pcb,
-				  ebbrt::EventManager::EventContext& context)
-  : TcpHandler(std::move(pcb)), context_(context), state_(NONE) {}
+					ebbrt::EventManager::EventContext& context,
+					size_t windowSize)
+  : TcpHandler(std::move(pcb)), context_(context), state_(NONE),
+    windowSize_(windowSize) {
+  DPrintf("%p\n", this);
+    }
 
 void CmdServer::OutConnection::Connected() {
   {
     uint32_t id=ebbrt::event_manager->GetEventId();
-    char buf[80];
-    snprintf(buf, sizeof(buf), "%s: %u\n", __FUNCTION__, id);
-    Print(buf,strlen(buf));
+    DPrintf("%u\n", id);
   }
   
-  Print("Connected\n");
+  DPrintf("%p: Connected\n", this);
   assert(state_ == BLOCKED);
   state_ = SUCCESS;
   ebbrt::event_manager->ActivateContext(std::move(context_));
 }
 
 void CmdServer::InConnection::Connected() {
-    Print("In Connected\n");
+  DPrintf("%p: In Connected\n", this);
 }
 
 void CmdServer::InConnection::Abort() {
-  Print("Abort\n");
+  DPrintf("%p: Abort\n", this);
 }
 
 
 void CmdServer::OutConnection::Abort() {
-  Print("Abort\n");
+  DPrintf("%p: Abort\n", this);
   if (state_ == BLOCKED) {
     state_ = ERROR;
     ebbrt::event_manager->ActivateContext(std::move(context_));
@@ -158,31 +179,33 @@ void CmdServer::OutConnection::Abort() {
 }
 
 void CmdServer::InConnection::Receive(std::unique_ptr<ebbrt::MutIOBuf> b) {
-  Print("In Receive\n");
+  DPrintf("%p: In Receive buf=%p\n", this, b.get());
   cmdServer->Buffer(std::move(b));
+  //  cmdServer->Buffer(b.get());
 }
 
 void CmdServer::OutConnection::Receive(std::unique_ptr<ebbrt::MutIOBuf> b) {
-  Print("Out Receive???\n");
+  DPrintf("%p: Out Receive???\n",this);
 }
 
 CmdServer::InConnection::~InConnection() {
-  Print("CmdServer::InConnection::~InConnection DESTROYED\n");
+  DPrintf("%p: CmdServer::InConnection::~InConnection DESTROYED\n", this);
 }
 
 
 CmdServer::OutConnection::~OutConnection() {
-  Print("CmdServer::OutConnection::~OutConnection DESTROYED\n");
+  DPrintf("%p: CmdServer::OutConnection::~OutConnection DESTROYED\n",this);
 }
 
 void CmdServer::OutConnection::Close() {
-  Print("OutConnection::Close\n");
+  DPrintf("%p: OutConnection::Close\n", this);
 }
 
 void CmdServer::InConnection::Close() {
-  Print("InConnection::Close\n");
+  DPrintf("%p: InConnection::Close\n", this);
   cmdServer->Do();
-  Shutdown();
+  // ANY FORM OF CLEANUP SEEMS TO trigger bugs in the destruction and rcu logic
+  Shutdown(); 
   delete this;
 }
 
@@ -197,19 +220,21 @@ void CmdServer::StartListening(uint16_t port) {
 
 int CmdServer::OutConnection::ConnectAndBlock(ebbrt::Ipv4Address address,
 					      uint16_t port) {
+  static uint16_t lport = 50000;
   {
     uint32_t id=ebbrt::event_manager->GetEventId();
-    char buf[80];
-    snprintf(buf, sizeof(buf), "%s: %u\n", __FUNCTION__, id);
-    Print(buf,strlen(buf));
+    DPrintf("%u\n", id);
   }
   
   Install();
 
-  Print("Installed\n");
+  DPrint("Installed\n");
   // JA: FIXME:  There is a race here right ... assuming interupts on different cores
-  Pcb().Connect(address, port);
-  Print("SavingContext\n");
+   lport++;
+    Pcb().Connect(address, port, lport);
+    //Pcb().Connect(address, port);
+  DPrint("Blocking!!!!\n");
+  DPrint("SavingContext\n");
   state_ = BLOCKED;
   ebbrt::event_manager->SaveContext(context_);
   if (state_ == SUCCESS) return 1;
@@ -219,63 +244,92 @@ int CmdServer::OutConnection::ConnectAndBlock(ebbrt::Ipv4Address address,
 int
 CmdServer::OutConnection::SendAndBlock(const char *bytes,
 				    size_t len) {
-  std::unique_ptr<IOBuf> buf = IOBuf::Create<IOBuf>
-    (bytes, len, 
-     [this]() {
-      Print("IOBuf::has been freed\n");
-      if (state_ == BLOCKED)  {
-	state_ = SUCCESS;
-	ebbrt::event_manager->ActivateContext(std::move(context_));
-      }
-     });
 
-  char sbuf[80];
-  snprintf(sbuf, sizeof(sbuf), "buf created: %s %lu\n", bytes, len);
-  Print(sbuf, strlen(sbuf));
 
+  size_t sendLen;
+  size_t sent = 0;
+  std::unique_ptr<IOBuf> buf;
+  DPrintf("%lu\n", len);
   
-  Send(std::move(buf));
-  Print("Connection Send called\n");
-  Pcb().Output();
-  Print("pcb Output called:  Blockeing\n");
-  state_ = BLOCKED;
-  ebbrt::event_manager->SaveContext(context_);
-  Print("Send Done\n");
-  if (state_ == SUCCESS) return len;
-  return 0;
+  while (len) {
+    // send at most windowSize amound of data
+    // at once
+    if (len > windowSize_) sendLen = windowSize_;
+    else sendLen = len;
+    
+    buf = IOBuf::Create<IOBuf>
+      (bytes+sent, sendLen, 
+       [this]() {
+	DPrint("IOBuf::has been freed\n");
+	if (state_ == BLOCKED)  {
+	  state_ = SUCCESS;
+	  ebbrt::event_manager->ActivateContext(std::move(context_));
+	}
+       });
+    DPrintf("buf created: %lu/%lu\n", sendLen, len);
+    Send(std::move(buf)); // buf can now be reassigned.... some else is responsible for delete
+    DPrint("Connection Send called\n");
+    Pcb().Output();
+    DPrint("pcb Output called:  Blocking\n");
+    state_ = BLOCKED;
+    ebbrt::event_manager->SaveContext(context_);
+    if (state_ != SUCCESS) return 0;
+      
+    DPrintf("Send Done: %lu/%lu\n", sendLen, len+sent);
+    sent += sendLen;
+    len -= sendLen;
+  }
+  return sent;
+}
+
+void CmdServer::OutConnection::Disconnect() {
+  Pcb().Disconnect();
 }
 
 int
 CmdServer::OutConnection::CloseAndBlock() {
+  state_ = BLOCKED;
+  ebbrt::event_manager->SaveContext(context_);
   return 1;
 }
+
+class TcpPCB : public ebbrt::NetworkManager::TcpPcb {
+public:
+  ~TcpPCB() {
+    DPrintf("%p: TcpPCB::~TcpPCB(): called\n", this);
+  }   
+};
 
 
 void CmdServer::Send(ebbrt::Ipv4Address address,
 		     uint16_t port,
 		     const char *bytes, size_t len) {
-  char buf[1024];
-  
-  snprintf(buf, sizeof(buf),
-	   "address: %x (%u) port: %d cmdLineLen: %lu cmdline: %s\n",
-	   address.toU32(), address.toU32(), port,
-	   ebbrt::multiboot::cmdline_len_,
-	   (char *)ebbrt::multiboot::CmdLine());
-  Print(buf);
+  DPrintf("address: %x (%u) port: %d cmdLineLen: %lu cmdline: %s\n",
+	  address.toU32(), address.toU32(), port,
+	  ebbrt::multiboot::cmdline_len_,
+	  (char *)ebbrt::multiboot::CmdLine());
   ebbrt::EventManager::EventContext context;
-  ebbrt::NetworkManager::TcpPcb pcb;
-  auto connection = new OutConnection(std::move(pcb), context);
-  Print("Connection Made\n");
+  //  TcpPCB *pcb = new TcpPCB;
+  TcpPCB pcb;
+  auto connection = new OutConnection(std::move(pcb), context, SENDWINDOWSIZE);
+  
+  DPrint("Connection Made\n");
+
 
   if (connection->ConnectAndBlock(address, port)) {
-    Print("Connected before Send\n");
+    DPrint("Connected before Send\n");
     connection->SendAndBlock(bytes,len);
-    connection->CloseAndBlock();
-    Print("Sent\n");
+    DPrint("Sent\n");
+    //    connection->Disconnect();
   } else {
-    Print("ERROR: On Connect :: skip send\n");
+    DPrint("ERROR: On Connect :: skip send\n");
   }
+  // trigger pcb destructor
+  DPrintf("%p: calling Shutdown\n", this);
   connection->Shutdown();
+  DPrintf("%p: Shutdown called\n", this);
+  //   connection->CloseAndBlock();
+  //  delete pcb
   delete connection;
 }
 
