@@ -12,20 +12,34 @@
 #include <ebbrt/UniqueIOBuf.h>
 #include <ebbrt/EventManager.h>
 
-#define DEBUG_WITH_PRINTER
+// uncomment to get lots of console messages to trace operation
+//#define DEBUG_WITH_KPRINTF
 
-#ifdef DEBUG_WITH_PRINTER
-#include "Printer.h"
-#define DPrint ebbrt::kprintf
+// EbbRT port allocator seems to have a bug... using this to ensure that every new connection
+// for send uses a different port starting at the value
+#define PORT_HACK
+
+#ifdef PORT_HACK
+#define START_LPORT 50000
+#endif
+
+#ifdef DEBUG_WITH_KPRINTF
+
+#define DPrint(str) {							\
+    uint32_t eid=ebbrt::event_manager->GetEventId();			\
+    ebbrt::kprintf("%u: %s: %p:" str, eid, __PRETTY_FUNCTION__,this);		\
+  }
+
 #define DPrintf(fmt, ...) {						\
-    uint32_t eid=ebbrt::event_manager->GetEventId();                     \
-    char dpbuf[1024];							\
-    snprintf(dpbuf,  sizeof(dpbuf), "%u: %s: " fmt, eid, __func__, __VA_ARGS__); \
-    ebbrt::kprintf(dpbuf);						\
+    uint32_t eid=ebbrt::event_manager->GetEventId();			\
+    ebbrt::kprintf("%u: %s: %p" fmt, eid, __PRETTY_FUNCTION__, this,__VA_ARGS__);	\
 }
+
 #else
-#define DPrint
+
+#define DPrint(str)
 #define DPrintf(...)
+
 #endif
 
 
@@ -95,7 +109,6 @@ CmdServer& CmdServer::HandleFault(ebbrt::EbbId id) {
 
 void CmdServer::Do() {
   DPrintf("Do: bufLen:%lu: \n", bufLen_);
-  DPrint(buffer_,bufLen_);
   static uint32_t addr = ebbrt::runtime::Frontend();
   static uint16_t port = 8090;
   static uint32_t naddr = ((addr >> 24) & 0xff) |
@@ -110,7 +123,7 @@ void CmdServer::Do() {
 }
 
 void CmdServer::Buffer(std::unique_ptr<ebbrt::MutIOBuf> b) {
-  DPrintf("START: MutIOBuf: %p\n", this);
+  DPrint("START: MutIOBuf\n");
   auto dp = b->GetMutDataPointer();
   auto len = b->Length();
 
@@ -123,7 +136,7 @@ void CmdServer::Buffer(std::unique_ptr<ebbrt::MutIOBuf> b) {
 }
 
 void CmdServer::Buffer(ebbrt::MutIOBuf *b) {
-  DPrintf("START: *  MutIOBuf: %p\n", this);
+  DPrint("START: *  MutIOBuf\n");
   auto dp = b->GetMutDataPointer();
   auto len = b->Length();
 
@@ -137,7 +150,7 @@ void CmdServer::Buffer(ebbrt::MutIOBuf *b) {
 
 CmdServer::InConnection::InConnection(ebbrt::NetworkManager::TcpPcb pcb)
   : TcpHandler(std::move(pcb)) {
-  DPrintf("%p\n", this);
+  DPrint("New InConnection\n");
 }
 
 
@@ -146,32 +159,27 @@ CmdServer::OutConnection::OutConnection(ebbrt::NetworkManager::TcpPcb pcb,
 					size_t windowSize)
   : TcpHandler(std::move(pcb)), context_(context), state_(NONE),
     windowSize_(windowSize) {
-  DPrintf("%p\n", this);
+  DPrint("New OutConnection\n");
     }
 
 void CmdServer::OutConnection::Connected() {
-  {
-    uint32_t id=ebbrt::event_manager->GetEventId();
-    DPrintf("%u\n", id);
-  }
-  
-  DPrintf("%p: Connected\n", this);
+  DPrint("START\n");
   assert(state_ == BLOCKED);
   state_ = SUCCESS;
   ebbrt::event_manager->ActivateContext(std::move(context_));
 }
 
 void CmdServer::InConnection::Connected() {
-  DPrintf("%p: In Connected\n", this);
+  DPrint("START\n");
 }
 
 void CmdServer::InConnection::Abort() {
-  DPrintf("%p: Abort\n", this);
+  DPrint("START\n");
 }
 
 
 void CmdServer::OutConnection::Abort() {
-  DPrintf("%p: Abort\n", this);
+  DPrint("START\n");
   if (state_ == BLOCKED) {
     state_ = ERROR;
     ebbrt::event_manager->ActivateContext(std::move(context_));
@@ -179,30 +187,30 @@ void CmdServer::OutConnection::Abort() {
 }
 
 void CmdServer::InConnection::Receive(std::unique_ptr<ebbrt::MutIOBuf> b) {
-  DPrintf("%p: In Receive buf=%p\n", this, b.get());
+  DPrintf("In Receive buf=%p\n", b.get());
   cmdServer->Buffer(std::move(b));
   //  cmdServer->Buffer(b.get());
 }
 
 void CmdServer::OutConnection::Receive(std::unique_ptr<ebbrt::MutIOBuf> b) {
-  DPrintf("%p: Out Receive???\n",this);
+  DPrint("Out Receive???\n");
 }
 
 CmdServer::InConnection::~InConnection() {
-  DPrintf("%p: CmdServer::InConnection::~InConnection DESTROYED\n", this);
+  DPrint("DESTROYED\n");
 }
 
 
 CmdServer::OutConnection::~OutConnection() {
-  DPrintf("%p: CmdServer::OutConnection::~OutConnection DESTROYED\n",this);
+  DPrint("DESTROYED\n");
 }
 
 void CmdServer::OutConnection::Close() {
-  DPrintf("%p: OutConnection::Close\n", this);
+  DPrint("Closed\n");
 }
 
 void CmdServer::InConnection::Close() {
-  DPrintf("%p: InConnection::Close\n", this);
+  DPrint("Closed\n");
   cmdServer->Do();
   // ANY FORM OF CLEANUP SEEMS TO trigger bugs in the destruction and rcu logic
   Shutdown(); 
@@ -220,19 +228,22 @@ void CmdServer::StartListening(uint16_t port) {
 
 int CmdServer::OutConnection::ConnectAndBlock(ebbrt::Ipv4Address address,
 					      uint16_t port) {
-  static uint16_t lport = 50000;
-  {
-    uint32_t id=ebbrt::event_manager->GetEventId();
-    DPrintf("%u\n", id);
-  }
+#ifdef PORT_HACK
+  static uint16_t lport = START_LPORT;
+#endif
+  
+  DPrint("START\n");
   
   Install();
 
   DPrint("Installed\n");
   // JA: FIXME:  There is a race here right ... assuming interupts on different cores
+#ifdef PORT_HACK
    lport++;
     Pcb().Connect(address, port, lport);
-    //Pcb().Connect(address, port);
+#else
+    Pcb().Connect(address, port);
+#endif
   DPrint("Blocking!!!!\n");
   DPrint("SavingContext\n");
   state_ = BLOCKED;
@@ -243,7 +254,7 @@ int CmdServer::OutConnection::ConnectAndBlock(ebbrt::Ipv4Address address,
 
 int
 CmdServer::OutConnection::SendAndBlock(const char *bytes,
-				    size_t len) {
+				       size_t len) {
 
 
   size_t sendLen;
@@ -296,7 +307,7 @@ CmdServer::OutConnection::CloseAndBlock() {
 class TcpPCB : public ebbrt::NetworkManager::TcpPcb {
 public:
   ~TcpPCB() {
-    DPrintf("%p: TcpPCB::~TcpPCB(): called\n", this);
+    DPrint("TcpPCB::~TcpPCB(): called\n");
   }   
 };
 
@@ -325,9 +336,9 @@ void CmdServer::Send(ebbrt::Ipv4Address address,
     DPrint("ERROR: On Connect :: skip send\n");
   }
   // trigger pcb destructor
-  DPrintf("%p: calling Shutdown\n", this);
+  DPrint("calling Shutdown\n");
   connection->Shutdown();
-  DPrintf("%p: Shutdown called\n", this);
+  DPrint("Shutdown called\n");
   //   connection->CloseAndBlock();
   //  delete pcb
   delete connection;
