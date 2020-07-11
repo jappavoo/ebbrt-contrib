@@ -1,1 +1,6 @@
-socat -d -d  TCP-LISTEN:8090,fork -
+#!/bin/bash
+if [[ -n $DEBUG ]]; then
+    exec socat -d -d  -u  TCP-LISTEN:8090,reuseaddr,fork -
+else
+    exec socat -u  TCP-LISTEN:8090,reuseaddr,fork -
+fi
